@@ -1,0 +1,26 @@
+{
+  "name": "surfing",
+  "version": "0.1.0",
+  "description": "Automated surf spot research for surfers: aggregates Surfline, Wannasurf, surf-forecast.com spot guides, Open-Meteo marine forecasts, NOAA buoy observations and tide predictions into comprehensive surf spot reports with session windows, hazards, and wetsuit recommendations",
+  "author": {
+    "name": "Elena Hernandez"
+  },
+  "homepage": "https://github.com/elenahernandez/claude-surfing-skills",
+  "repository": "https://github.com/elenahernandez/claude-surfing-skills",
+  "license": "MIT",
+  "keywords": [
+    "surfing",
+    "surf-forecast",
+    "swell",
+    "tides",
+    "waves",
+    "spot-guide",
+    "session-planning",
+    "buoys",
+    "noaa",
+    "open-meteo"
+  ],
+  "skills": [
+    "./skills/spot-researcher"
+  ]
+}
