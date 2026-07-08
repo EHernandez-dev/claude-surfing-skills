@@ -19,7 +19,7 @@ Ask Claude to research any surf spot. The spot-researcher skill pulls swell, win
 Install with [`npx skills`](https://github.com/vercel-labs/skills):
 
 ```
-npx skills add elenahernandez/claude-surfing-skills
+npx skills add EHernandez-dev/claude-surfing-skills
 ```
 
 Then just ask naturally: `"Research Ocean Beach SF"`. Claude generates a surf spot report in your current directory.
@@ -109,15 +109,15 @@ Missing data? The skill notes what's unavailable in an "Information Gaps" sectio
 [`npx skills`](https://github.com/vercel-labs/skills) installs the `spot-researcher` skill directly:
 
 ```
-npx skills add elenahernandez/claude-surfing-skills
+npx skills add EHernandez-dev/claude-surfing-skills
 ```
 
 Useful flags:
 
 ```
-npx skills add elenahernandez/claude-surfing-skills --list   # preview before installing
-npx skills add elenahernandez/claude-surfing-skills -g        # install globally (all projects)
-npx skills add elenahernandez/claude-surfing-skills -y        # skip confirmation prompts
+npx skills add EHernandez-dev/claude-surfing-skills --list   # preview before installing
+npx skills add EHernandez-dev/claude-surfing-skills -g        # install globally (all projects)
+npx skills add EHernandez-dev/claude-surfing-skills -y        # skip confirmation prompts
 ```
 
 This gives you the full natural-language workflow (`"Research Ocean Beach SF"`). The `/surfing:*` slash commands are **not** included, install the plugin below if you want them.
@@ -127,7 +127,7 @@ This gives you the full natural-language workflow (`"Research Ocean Beach SF"`).
 The plugin bundles the same skill plus the `/surfing:*` slash commands:
 
 ```
-/plugin marketplace add elenahernandez/claude-surfing-skills
+/plugin marketplace add EHernandez-dev/claude-surfing-skills
 /plugin install surfing@surfing-marketplace
 /reload-plugins
 ```
@@ -174,7 +174,11 @@ Pull requests welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Support
 
-[Open an issue](https://github.com/elenahernandez/claude-surfing-skills/issues) or start a discussion.
+[Open an issue](https://github.com/EHernandez-dev/claude-surfing-skills/issues) or start a discussion.
+
+## Acknowledgements
+
+This project is modeled on [claude-mountaineering-skills](https://github.com/dreamiurg/claude-mountaineering-skills) by [@dreamiurg](https://github.com/dreamiurg) (MIT), which pioneered the hybrid architecture used here: deterministic Python for API data, parallel researcher agents for judgment, and graceful degradation into an Information Gaps section. `cloudscrape.py` is adapted directly from that repo.
 
 ## License
 

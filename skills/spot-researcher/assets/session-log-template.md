@@ -1,6 +1,6 @@
 # Session Log: {Spot Name}
 
-> Generated with the [surfing spot-researcher skill](https://github.com/elenahernandez/claude-surfing-skills).
+> Generated with the [surfing spot-researcher skill](https://github.com/EHernandez-dev/claude-surfing-skills).
 
 **Date:** {YYYY-MM-DD}
 **Time in / out:** {HH:MM} - {HH:MM}

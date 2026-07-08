@@ -241,4 +241,4 @@ It covers: conditions as experienced vs forecast, how the forecast verified, boa
 
 ---
 
-*Research completed {timestamp} using [spot-researcher v{version}](https://github.com/elenahernandez/claude-surfing-skills/tree/main/skills/spot-researcher) from the [Claude Surfing Skills](https://github.com/elenahernandez/claude-surfing-skills) repository.*
+*Research completed {timestamp} using [spot-researcher v{version}](https://github.com/EHernandez-dev/claude-surfing-skills/tree/main/skills/spot-researcher) from the [Claude Surfing Skills](https://github.com/EHernandez-dev/claude-surfing-skills) repository.*

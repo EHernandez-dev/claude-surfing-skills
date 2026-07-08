@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Fetch content from protected websites.
 
+Adapted from claude-mountaineering-skills by dreamiurg
+(https://github.com/dreamiurg/claude-mountaineering-skills),
+MIT License, Copyright (c) 2025 dreamiurg. See LICENSE.
+
 Default path: httpx with browser-like headers (handles most sites).
 --render path: Patchright (stealth headless Chromium) for JS-rendered /
 Cloudflare-challenged pages (Surfline, Windguru, some webcam pages).

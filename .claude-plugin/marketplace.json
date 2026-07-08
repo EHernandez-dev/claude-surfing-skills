@@ -2,15 +2,15 @@
   "name": "surfing-marketplace",
   "description": "Automated surf spot research for surfers: aggregates Surfline, Wannasurf, surf-forecast.com spot guides, Open-Meteo marine forecasts, NOAA buoy observations and tide predictions into comprehensive surf spot reports with session windows, hazards, and wetsuit recommendations",
   "owner": {
-    "name": "elenahernandez",
-    "url": "https://github.com/elenahernandez"
+    "name": "EHernandez-dev",
+    "url": "https://github.com/EHernandez-dev"
   },
   "plugins": [
     {
       "name": "surfing",
       "source": {
         "source": "url",
-        "url": "https://github.com/elenahernandez/claude-surfing-skills.git"
+        "url": "https://github.com/EHernandez-dev/claude-surfing-skills.git"
       },
       "description": "Automated surf spot research for surfers: aggregates Surfline, Wannasurf, surf-forecast.com spot guides, Open-Meteo marine forecasts, NOAA buoy observations and tide predictions into comprehensive surf spot reports with session windows, hazards, and wetsuit recommendations",
       "version": "0.1.0"
