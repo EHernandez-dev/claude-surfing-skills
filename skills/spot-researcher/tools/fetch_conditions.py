@@ -9,6 +9,13 @@ only at the output edge, controlled by --units (metric default, imperial
 optional). JSON keys are unit-neutral and the payload echoes the units in
 effect in a top-level `units` object.
 
+Surf folder integration: --spot-file loads coordinates, name, facing, tide
+station, and a pinned buoy from a spot profile (spots/<slug>.yaml); explicit
+flags override. --surfer-file reads the units preference from the surfer
+profile (surfer.yaml); precedence is flag, then surfer profile, then metric.
+When a spot profile is used, the payload echoes its age under spot.profile
+(profiles never expire; past ~6 months re-research is only suggested).
+
 Data sources:
 - Open-Meteo Marine API: wave/swell height, period, direction, sea surface temp
 - Open-Meteo Forecast API: wind, air temp, precipitation, UV index
@@ -34,6 +41,7 @@ from zoneinfo import ZoneInfo
 
 import click
 import httpx
+import yaml
 
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -75,6 +83,9 @@ UNIT_LABELS = {
 
 # Filename slugs for the per-day verdict (Go / Worth a check / Skip).
 VERDICT_SLUGS = ("go", "check", "skip")
+
+# Spot profiles never expire; past this age the payload suggests re-research.
+RERESEARCH_AFTER_DAYS = 183
 
 # Chart datum matches published European tide tables, mirroring NOAA's MLLW
 # (ADR 0001). WorldTides' default MSL would match no published table.
@@ -204,6 +215,66 @@ def report_filename(target_date: str, spot_name: str, verdict: str) -> str:
     if verdict not in VERDICT_SLUGS:
         raise ValueError(f"Verdict must be one of {VERDICT_SLUGS}, got: {verdict!r}")
     return f"{target_date}-{slugify(spot_name)}-{verdict}.md"
+
+
+def load_yaml_mapping(path: str, kind: str) -> dict[str, Any]:
+    """Load a YAML file that must contain a mapping. Raises ValueError so the
+    CLI can treat a bad profile path or file as an invalid argument (exit 1)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except OSError as e:
+        raise ValueError(f"Cannot read {kind} {path}: {e}") from e
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in {kind} {path}: {e}") from e
+    if not isinstance(data, dict):
+        raise ValueError(f"{kind} {path} must be a YAML mapping")
+    return data
+
+
+def profile_coordinates(profile: dict[str, Any]) -> str | None:
+    """Spot profile coordinates as a 'lat,lon' string for parse_coordinates."""
+    value = profile.get("coordinates")
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return f"{value[0]},{value[1]}"
+    raise ValueError(f"Spot profile coordinates must be [lat, lon], got: {value!r}")
+
+
+def surfer_units(surfer: dict[str, Any]) -> str | None:
+    """Units preference from the surfer profile, validated."""
+    units = surfer.get("units")
+    if units is None:
+        return None
+    if units not in UNIT_LABELS:
+        raise ValueError(f"Surfer profile units must be one of {sorted(UNIT_LABELS)}, got: {units!r}")
+    return units
+
+
+def profile_age(last_researched: Any, today: date) -> dict[str, Any]:
+    """Age block for the payload's spot.profile echo.
+
+    Spot profiles never expire: past ~6 months the payload only flags
+    `reresearch_suggested`, it never withholds the profile.
+    """
+    if isinstance(last_researched, datetime):
+        last_researched = last_researched.date()
+    elif isinstance(last_researched, str):
+        try:
+            last_researched = date.fromisoformat(last_researched)
+        except ValueError:
+            last_researched = None
+    if not isinstance(last_researched, date):
+        return {"last_researched": None, "age_days": None, "reresearch_suggested": None}
+    age_days = (today - last_researched).days
+    return {
+        "last_researched": last_researched.isoformat(),
+        "age_days": age_days,
+        "reresearch_suggested": age_days > RERESEARCH_AFTER_DAYS,
+    }
 
 
 def classify_wind(wind_from_deg: float | None, facing_deg: float, speed_ms: float | None) -> str | None:
@@ -670,6 +741,44 @@ def nearest_portus_station(
 PORTUS_MANUAL_NOTE = "Check https://portus.puertos.es manually."
 
 
+def _fetch_portus_station(station_id: str, station_meta: dict[str, Any]) -> dict[str, Any]:
+    """Latest observation from one known PORTUS station (one lastData request).
+
+    `station_meta` carries display fields (`name`, `distance_km`) from the
+    station list or a spot profile's pinned buoy entry.
+    """
+    try:
+        with httpx.Client(timeout=30.0, headers=PORTUS_HEADERS) as client:
+            response = client.post(
+                PORTUS_LASTDATA_URL.format(station_id=station_id),
+                params={"locale": "es"},
+                json=PORTUS_CATEGORIES,
+            )
+            response.raise_for_status()
+            observation = parse_portus_lastdata(response.json())
+    except Exception as e:
+        return {
+            "error": f"Puertos del Estado observation failed for station {station_id}: {e}",
+            "note": PORTUS_MANUAL_NOTE,
+        }
+
+    if observation is None:
+        return {
+            "error": f"Puertos del Estado station {station_id} ({station_meta.get('name', '')}) has no current wave data",
+            "note": PORTUS_MANUAL_NOTE,
+        }
+
+    return {
+        "station": {
+            "id": str(station_id),
+            "name": station_meta.get("name", ""),
+            "distance_km": station_meta.get("distance_km"),
+            "url": PORTUS_PORTAL_URL,
+        },
+        **observation,
+    }
+
+
 def fetch_buoy_portus(lat: float, lon: float) -> dict[str, Any]:
     """Latest observation from the nearest Puertos del Estado wave buoy.
 
@@ -677,54 +786,28 @@ def fetch_buoy_portus(lat: float, lon: float) -> dict[str, Any]:
     lastData request per run - if the nearest station has no usable data,
     degrade rather than try the next one.
     """
-    with httpx.Client(timeout=30.0, headers=PORTUS_HEADERS) as client:
-        try:
+    try:
+        with httpx.Client(timeout=30.0, headers=PORTUS_HEADERS) as client:
             response = client.get(PORTUS_STATIONS_URL, params={"locale": "es"})
             response.raise_for_status()
             stations = response.json()
-        except Exception as e:
-            return {
-                "error": f"Puertos del Estado station lookup failed: {e}",
-                "note": PORTUS_MANUAL_NOTE,
-            }
-
-        nearest = nearest_portus_station(stations, lat, lon)
-        if nearest is None:
-            return {
-                "error": f"No Puertos del Estado wave buoy within {int(MAX_BUOY_KM)} km",
-                "note": f"No nearby observed-wave data from this network. {PORTUS_MANUAL_NOTE}",
-            }
-        station, distance = nearest
-
-        try:
-            response = client.post(
-                PORTUS_LASTDATA_URL.format(station_id=station["id"]),
-                params={"locale": "es"},
-                json=PORTUS_CATEGORIES,
-            )
-            response.raise_for_status()
-            observation = parse_portus_lastdata(response.json())
-        except Exception as e:
-            return {
-                "error": f"Puertos del Estado observation failed for station {station['id']}: {e}",
-                "note": PORTUS_MANUAL_NOTE,
-            }
-
-    if observation is None:
+    except Exception as e:
         return {
-            "error": f"Puertos del Estado station {station['id']} ({station.get('nombre', '')}) has no current wave data",
+            "error": f"Puertos del Estado station lookup failed: {e}",
             "note": PORTUS_MANUAL_NOTE,
         }
 
-    return {
-        "station": {
-            "id": str(station["id"]),
-            "name": station.get("nombre", ""),
-            "distance_km": round(distance, 1),
-            "url": PORTUS_PORTAL_URL,
-        },
-        **observation,
-    }
+    nearest = nearest_portus_station(stations, lat, lon)
+    if nearest is None:
+        return {
+            "error": f"No Puertos del Estado wave buoy within {int(MAX_BUOY_KM)} km",
+            "note": f"No nearby observed-wave data from this network. {PORTUS_MANUAL_NOTE}",
+        }
+    station, distance = nearest
+    return _fetch_portus_station(
+        str(station["id"]),
+        {"name": station.get("nombre", ""), "distance_km": round(distance, 1)},
+    )
 
 
 def fetch_buoy_ndbc(lat: float, lon: float) -> dict[str, Any]:
@@ -844,6 +927,67 @@ def fetch_buoy(lat: float, lon: float) -> dict[str, Any]:
         + " or ".join(urls or ["https://www.ndbc.noaa.gov"])
         + " manually.",
     }
+
+
+def _fetch_ndbc_station(station_id: str, station_meta: dict[str, Any]) -> dict[str, Any]:
+    """Latest observation from one known NDBC station (no station-list download)."""
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(NDBC_REALTIME_URL.format(station_id=station_id))
+            response.raise_for_status()
+            observation = parse_ndbc_realtime(response.text)
+    except Exception as e:
+        return {
+            "error": f"NDBC station {station_id} fetch failed: {e}",
+            "note": "Check https://www.ndbc.noaa.gov manually.",
+        }
+
+    if observation is None:
+        return {
+            "error": f"NDBC station {station_id} is not reporting wave data",
+            "note": "Check https://www.ndbc.noaa.gov for station status.",
+        }
+
+    return {
+        "station": {
+            "id": str(station_id),
+            "name": station_meta.get("name", ""),
+            "distance_km": station_meta.get("distance_km"),
+            "url": f"https://www.ndbc.noaa.gov/station_page.php?station={station_id}",
+        },
+        **observation,
+    }
+
+
+# Single-station fetchers per network, used for a spot profile's pinned buoy.
+# `network` values match the registry names in BUOY_NETWORKS. Lambdas resolve
+# the module-level names at call time, same as BUOY_NETWORKS (tests
+# monkeypatch the fetchers).
+PINNED_BUOY_FETCHERS: dict[str, Any] = {
+    "NOAA NDBC": lambda station_id, meta: _fetch_ndbc_station(station_id, meta),
+    "Puertos del Estado": lambda station_id, meta: _fetch_portus_station(station_id, meta),
+}
+
+
+def fetch_buoy_pinned(buoy_cfg: dict[str, Any]) -> dict[str, Any]:
+    """Observation from the spot profile's pinned buoy, skipping the
+    nearest-station lookup. Returns the standard error shape on any failure;
+    the caller falls back to the registry lookup and reports a gap.
+    """
+    station_id = buoy_cfg.get("station_id")
+    if station_id is None:
+        return {
+            "error": "Spot profile buoy entry has no station_id",
+            "note": "Fix the profile's buoy block or remove it to use the nearest-station lookup.",
+        }
+    network = buoy_cfg.get("network")
+    fetcher = PINNED_BUOY_FETCHERS.get(network)
+    if fetcher is None:
+        return {
+            "error": f"Unknown buoy network in spot profile: {network!r} (known: {', '.join(PINNED_BUOY_FETCHERS)})",
+            "note": "Fix the profile's buoy.network or remove the buoy block to use the nearest-station lookup.",
+        }
+    return fetcher(str(station_id), buoy_cfg)
 
 
 def fetch_daylight(lat: float, lon: float, tz_name: str, days: int) -> dict[str, Any]:
@@ -1111,8 +1255,24 @@ def build_weather(wind_raw: dict[str, Any], units: str) -> dict[str, Any]:
 
 
 @click.command()
-@click.option("--coordinates", required=True, help='Spot coordinates as "lat,lon" (in the water, near the break)')
-@click.option("--spot-name", required=True, help="Surf spot name")
+@click.option(
+    "--coordinates",
+    default=None,
+    help='Spot coordinates as "lat,lon" (in the water, near the break). Required unless --spot-file provides them.',
+)
+@click.option("--spot-name", default=None, help="Surf spot name. Required unless --spot-file provides it.")
+@click.option(
+    "--spot-file",
+    default=None,
+    help="Path to a spot profile (spots/<slug>.yaml in the surf folder). Supplies coordinates, "
+    "name, facing, tide station, and pinned buoy; explicit flags override profile values.",
+)
+@click.option(
+    "--surfer-file",
+    default=None,
+    help="Path to the surfer profile (surfer.yaml in the surf folder). Supplies the units preference "
+    "(the --units flag wins).",
+)
 @click.option(
     "--facing",
     type=float,
@@ -1125,9 +1285,9 @@ def build_weather(wind_raw: dict[str, Any], units: str) -> dict[str, Any]:
 @click.option(
     "--units",
     type=click.Choice(["metric", "imperial"]),
-    default="metric",
-    help="Output units: metric (heights m, wind km/h, temps °C; default) or imperial (ft, kn, °F). "
-    "Precedence: this flag, then the surfer profile (once it exists), then metric.",
+    default=None,
+    help="Output units: metric (heights m, wind km/h, temps °C) or imperial (ft, kn, °F). "
+    "Precedence: this flag, then the surfer profile, then metric.",
 )
 @click.option(
     "--target-day",
@@ -1136,17 +1296,31 @@ def build_weather(wind_raw: dict[str, Any], units: str) -> dict[str, Any]:
     "Defaults to the forecast window's first day.",
 )
 def cli(
-    coordinates: str,
-    spot_name: str,
+    coordinates: str | None,
+    spot_name: str | None,
+    spot_file: str | None,
+    surfer_file: str | None,
     facing: float | None,
     days: int,
     tide_station: str | None,
-    units: str,
+    units: str | None,
     target_day: str | None,
 ):
     """Fetch surf conditions for a spot and print unified JSON to stdout."""
     try:
+        profile = load_yaml_mapping(spot_file, "spot profile") if spot_file else {}
+        surfer = load_yaml_mapping(surfer_file, "surfer profile") if surfer_file else {}
+        coordinates = coordinates or profile_coordinates(profile)
+        if coordinates is None:
+            raise ValueError("--coordinates is required (directly or via a --spot-file with coordinates)")
         lat, lon = parse_coordinates(coordinates)
+        spot_name = spot_name or profile.get("name")
+        if not spot_name:
+            raise ValueError("--spot-name is required (directly or via a --spot-file with a name)")
+        if facing is None and profile.get("facing_deg") is not None:
+            facing = float(profile["facing_deg"])
+        tide_station = tide_station or profile.get("tide_station")
+        units = units or surfer_units(surfer) or "metric"
         if target_day is not None:
             date.fromisoformat(target_day)
     except ValueError as e:
@@ -1158,10 +1332,21 @@ def cli(
 
     marine_raw = fetch_marine(lat, lon, days)
     wind_raw = fetch_wind_weather(lat, lon, days)
-    buoy = fetch_buoy(lat, lon)
+
+    buoy_cfg = profile.get("buoy")
+    if isinstance(buoy_cfg, dict):
+        buoy = fetch_buoy_pinned(buoy_cfg)
+        if "error" in buoy:
+            gaps.append(
+                f"buoy: pinned station {buoy_cfg.get('station_id')} failed ({buoy['error']}); "
+                "fell back to the nearest-station lookup"
+            )
+            buoy = fetch_buoy(lat, lon)
+    else:
+        buoy = fetch_buoy(lat, lon)
 
     if tide_station:
-        tides = _fetch_tide_predictions(tide_station, days)
+        tides = _fetch_tide_predictions(str(tide_station), days)
     else:
         tides = fetch_tides(lat, lon, days)
 
@@ -1181,14 +1366,21 @@ def cli(
     target_date = target_day or window_start
     spot_slug = slugify(spot_name)
 
+    spot: dict[str, Any] = {
+        "name": spot_name,
+        "coordinates": [lat, lon],
+        "facing_deg": facing,
+        "facing_compass": compass(facing) if facing is not None else None,
+        "timezone": tz_name,
+    }
+    if spot_file:
+        spot["profile"] = {
+            "path": spot_file,
+            **profile_age(profile.get("last_researched"), date.today()),
+        }
+
     result: dict[str, Any] = {
-        "spot": {
-            "name": spot_name,
-            "coordinates": [lat, lon],
-            "facing_deg": facing,
-            "facing_compass": compass(facing) if facing is not None else None,
-            "timezone": tz_name,
-        },
+        "spot": spot,
         "units": {"system": units, **UNIT_LABELS[units]},
         "report": {
             "directory": "reports",

@@ -85,11 +85,13 @@ uv run python fetch_conditions.py \
 
 **Parameters:**
 
-- `--coordinates` (required): Lat/lon as `"lat,lon"`, a point in the water near the break, not the town center
-- `--spot-name` (required): Surf spot name
+- `--coordinates` (required unless `--spot-file` provides them): Lat/lon as `"lat,lon"`, a point in the water near the break, not the town center
+- `--spot-name` (required unless `--spot-file` provides it): Surf spot name
+- `--spot-file` (optional): Path to a spot profile (`spots/<slug>.yaml` in the surf folder, schema: `../assets/spot-profile-template.yaml`). Supplies coordinates, name, facing, tide station, and a pinned buoy (fetched directly, skipping the nearest-station lookup; on failure the registry lookup takes over and a gap is reported). Explicit flags override profile values. A missing or invalid file is an argument error (exit 1)
+- `--surfer-file` (optional): Path to the surfer profile (`surfer.yaml` in the surf folder, example: `../assets/surfer-template.yaml`). Supplies the units preference
 - `--facing` (optional): Direction the spot faces looking out to sea, degrees true (e.g. 270 = west-facing). Enables `wind_type` (offshore/onshore/cross-shore/light), per-block `quality` ratings, and `surf_windows`
 - `--days` (optional): Forecast days, 1-7 (default: 7)
-- `--units` (optional): `metric` (default: heights m, wind km/h, temps °C) or `imperial` (heights ft, wind kn, temps °F). Precedence: this flag, then the surfer profile (once it exists), then metric. All quantities are SI internally; conversion happens only at the output edge
+- `--units` (optional): `metric` (heights m, wind km/h, temps °C) or `imperial` (heights ft, wind kn, temps °F). Precedence: this flag, then the surfer profile, then metric. All quantities are SI internally; conversion happens only at the output edge
 - `--target-day` (optional): The day (YYYY-MM-DD) the surfer intends to surf; keys `report.target_date`. Defaults to the forecast window's first day, never the run date
 - `--tide-station` (optional): NOAA CO-OPS station ID override, skips the nearest-station lookup
 
@@ -101,7 +103,7 @@ uv run python fetch_conditions.py \
 
 Returns unified JSON with these keys. All keys are unit-neutral; the `units` object states the units in effect:
 
-- `spot`: echo of inputs plus `facing_compass` and `timezone`
+- `spot`: echo of inputs plus `facing_compass` and `timezone`; when `--spot-file` was passed, also `profile` (`path`, `last_researched`, `age_days`, `reresearch_suggested` - true past ~6 months (183 days); profiles never expire, the flag only prompts a re-research suggestion)
 - `units`: `system` ("metric"/"imperial") plus display labels `wave_height`, `tide_height`, `wind_speed`, `temperature`
 - `report`: report naming inputs, `directory` ("reports"), `target_date` (target day, falling back to the forecast window's first day, never the run date; null when neither is known), `spot_slug`, `filenames` (exact report path per verdict slug: `go`/`check`/`skip`, following `reports/{target-date}-{spot-slug}-{verdict}.md`)
 - `marine.days[]`: per-day forecast, each with `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local) containing `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type`, and `quality` (`score` 0-10 + `rating`)
@@ -220,5 +222,6 @@ Managed in `pyproject.toml`:
 - **httpx** - modern HTTP client
 - **astral** - astronomy calculations (daylight)
 - **patchright** - stealth headless browser (`--render` path in cloudscrape.py)
+- **pyyaml** - spot and surfer profile parsing (`--spot-file` / `--surfer-file`)
 
 Dev dependencies: pytest

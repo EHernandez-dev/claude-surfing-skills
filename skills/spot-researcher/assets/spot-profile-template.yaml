@@ -1,0 +1,58 @@
+# Spot profile - the persistent record of one surf spot in the surf folder,
+# saved as spots/<slug>.yaml (slug = slugified spot name, same slug as report
+# filenames). Written and updated by /surfing:research after each analysis;
+# safe to edit by hand. Profiles never expire: every use shows the profile's
+# age, and past ~6 months re-research is suggested, never forced.
+#
+# This template is a filled example (Mundaka). Values below are real so the
+# file loads through `fetch_conditions.py --spot-file` as-is.
+
+name: Mundaka
+region: Bizkaia, Basque Country, Spain
+coordinates: [43.4095, -2.6995] # decimal degrees, in the water just outside the break
+facing_deg: 350 # direction the spot faces out to sea, degrees true
+
+# --- read by fetch_conditions.py: tide_station and buoy (plus name,
+# coordinates, and facing_deg above); tide_source is informational ---
+
+tide_source: WorldTides # where tide predictions come from: NOAA CO-OPS, WorldTides, or a manual URL
+tide_station: null # NOAA CO-OPS station id when tide_source is NOAA CO-OPS; otherwise null
+
+buoy: # pinned observation buoy; skips the nearest-station lookup
+  network: Puertos del Estado # one of: NOAA NDBC, Puertos del Estado
+  station_id: "2136"
+  name: Boya de Bilbao-Vizcaya
+  distance_km: 36.0
+
+# --- works-on profile: what verdicts are corrected against ---
+
+works_on:
+  swell_direction: NW
+  swell_size: "1.0-1.5 m minimum to break, best 2-3 m faces, holds 4 m+"
+  min_period_s: 12
+  wind: S-SW offshore
+  tide: low to mid, best on the push just after the low turn
+  season: October-March
+
+break:
+  type: rivermouth # beach / point / reef / rivermouth
+  bottom: sand
+  direction: left
+  ability: advanced
+
+# --- logistics and safety, one line each ---
+
+hazards:
+  - Strong tidal rip along the estuary channel, strongest on the outgoing tide
+  - Rock exposure at the harbor-wall entry and the church-stairs exit
+  - Steep sucking takeoff onto a shallow sandbar; long hold-downs when big
+  - Heavy localism reputation; narrow takeoff zone, wait your turn
+
+webcams:
+  - name: surf-forecast.com Mundaka cam
+    url: https://www.surf-forecast.com/breaks/Mundaka/webcams/latest
+    free: true
+
+notes: Tide-windowed (~2 h around low-to-mid). Summer is mostly flat; it is an autumn/winter wave.
+
+last_researched: 2026-07-08

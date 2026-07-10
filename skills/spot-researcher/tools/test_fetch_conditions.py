@@ -7,6 +7,8 @@ with RUN_INTEGRATION_TESTS=1.
 
 import json
 import os
+from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -903,6 +905,358 @@ class TestCliValidation:
         result = runner.invoke(cli, ["--coordinates", "bogus", "--spot-name", "X"])
         assert result.exit_code == 1
         assert "error" in json.loads(result.output)
+
+
+# ---------------------------------------------------------------------------
+# Spot profile (--spot-file) and surfer profile (--surfer-file) at the CLI seam
+# ---------------------------------------------------------------------------
+
+SPOT_PROFILE_YAML = """\
+name: Mundaka
+region: Bizkaia, Basque Country, Spain
+coordinates: [43.407, -2.699]
+facing_deg: 350
+tide_source: WorldTides
+tide_station: null
+buoy:
+  network: Puertos del Estado
+  station_id: "2136"
+  name: Boya de Bilbao-Vizcaya
+  distance_km: 36.0
+works_on:
+  swell_direction: NW
+  min_period_s: 12
+last_researched: 2026-01-10
+"""
+
+SURFER_PROFILE_YAML = """\
+name: Elena
+skill_level: intermediate
+boards:
+  - name: daily driver
+    type: shortboard
+home_spots:
+  - mundaka
+units: imperial
+target_days: [saturday, sunday]
+"""
+
+
+def invoke_cli(*args):
+    return CliRunner().invoke(cli, list(args))
+
+
+class TestCliSpotFile:
+    @pytest.fixture
+    def spot_path(self, tmp_path):
+        path = tmp_path / "mundaka.yaml"
+        path.write_text(SPOT_PROFILE_YAML)
+        return str(path)
+
+    @pytest.fixture
+    def pinned_buoy_ok(self, monkeypatch):
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_pinned", lambda cfg: BUOY_SI)
+
+    def test_profile_supplies_coordinates_name_and_facing(
+        self, patched_fetchers, pinned_buoy_ok, monkeypatch, spot_path
+    ):
+        seen = {}
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_marine", lambda lat, lon, days: seen.update(coords=(lat, lon)) or MARINE_RAW
+        )
+        result = invoke_cli("--spot-file", spot_path)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["spot"]["name"] == "Mundaka"
+        assert data["spot"]["coordinates"] == [43.407, -2.699]
+        assert seen["coords"] == (43.407, -2.699)
+        assert data["spot"]["facing_deg"] == 350
+        assert data["surf_windows"], "facing from the profile must enable surf windows"
+
+    def test_pinned_buoy_skips_nearest_lookup(self, patched_fetchers, monkeypatch, spot_path):
+        seen = {}
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_buoy_pinned", lambda cfg: seen.update(cfg=cfg) or BUOY_SI
+        )
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_buoy", lambda lat, lon: pytest.fail("nearest-station lookup must be skipped")
+        )
+        result = invoke_cli("--spot-file", spot_path)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert seen["cfg"]["station_id"] == "2136"
+        assert data["buoy"]["wave_height"] == 1.5
+
+    def test_pinned_buoy_failure_falls_back_to_registry(self, patched_fetchers, monkeypatch, spot_path):
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_buoy_pinned", lambda cfg: {"error": "station 2136 silent", "note": "n"}
+        )
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy", lambda lat, lon: BUOY_SI)
+        result = invoke_cli("--spot-file", spot_path)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["buoy"]["wave_height"] == 1.5, "registry lookup must take over"
+        assert any("pinned" in g for g in data["gaps"]), "fallback must be reported as a gap"
+
+    def test_tide_station_from_profile(self, patched_fetchers, pinned_buoy_ok, monkeypatch, tmp_path):
+        profile = SPOT_PROFILE_YAML.replace("tide_station: null", 'tide_station: "9414290"')
+        path = tmp_path / "spot.yaml"
+        path.write_text(profile)
+        seen = {}
+        monkeypatch.setattr(
+            fetch_conditions,
+            "_fetch_tide_predictions",
+            lambda station_id, days: seen.update(station=station_id) or TIDES_SI,
+        )
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_tides", lambda lat, lon, days: pytest.fail("ladder must be skipped")
+        )
+        result = invoke_cli("--spot-file", str(path))
+        assert result.exit_code == 0, result.output
+        assert seen["station"] == "9414290"
+
+    def test_explicit_flags_override_profile(self, patched_fetchers, pinned_buoy_ok, monkeypatch, spot_path):
+        seen = {}
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_marine", lambda lat, lon, days: seen.update(coords=(lat, lon)) or MARINE_RAW
+        )
+        monkeypatch.setattr(
+            fetch_conditions,
+            "_fetch_tide_predictions",
+            lambda station_id, days: seen.update(station=station_id) or TIDES_SI,
+        )
+        result = invoke_cli(
+            "--spot-file", spot_path,
+            "--coordinates", "37.759,-122.513",
+            "--spot-name", "Ocean Beach",
+            "--facing", "265",
+            "--tide-station", "9414290",
+        )
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["spot"]["name"] == "Ocean Beach"
+        assert data["spot"]["coordinates"] == [37.759, -122.513]
+        assert seen["coords"] == (37.759, -122.513)
+        assert data["spot"]["facing_deg"] == 265
+        assert seen["station"] == "9414290"
+
+    def _profile_aged(self, tmp_path, age_days):
+        last = (date.today() - timedelta(days=age_days)).isoformat()
+        path = tmp_path / "spot.yaml"
+        path.write_text(SPOT_PROFILE_YAML.replace("last_researched: 2026-01-10", f"last_researched: {last}"))
+        return str(path)
+
+    def test_fresh_profile_age_echoed(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        result = invoke_cli("--spot-file", self._profile_aged(tmp_path, 30))
+        assert result.exit_code == 0, result.output
+        profile = json.loads(result.output)["spot"]["profile"]
+        assert profile["age_days"] == 30
+        assert profile["reresearch_suggested"] is False
+        assert profile["last_researched"] == (date.today() - timedelta(days=30)).isoformat()
+
+    def test_stale_profile_suggests_reresearch(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        result = invoke_cli("--spot-file", self._profile_aged(tmp_path, 200))
+        assert result.exit_code == 0, result.output
+        profile = json.loads(result.output)["spot"]["profile"]
+        assert profile["age_days"] == 200
+        assert profile["reresearch_suggested"] is True
+
+    def test_profile_without_last_researched(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        path = tmp_path / "spot.yaml"
+        path.write_text(SPOT_PROFILE_YAML.replace("last_researched: 2026-01-10\n", ""))
+        result = invoke_cli("--spot-file", str(path))
+        assert result.exit_code == 0, result.output
+        profile = json.loads(result.output)["spot"]["profile"]
+        assert profile["last_researched"] is None
+        assert profile["age_days"] is None
+        assert profile["reresearch_suggested"] is None
+
+    def test_missing_spot_file_exits_1(self):
+        result = invoke_cli("--spot-file", "/nonexistent/spots/nowhere.yaml")
+        assert result.exit_code == 1
+        assert "error" in json.loads(result.output)
+
+    def test_invalid_yaml_exits_1(self, tmp_path):
+        path = tmp_path / "broken.yaml"
+        path.write_text("coordinates: [43.407, -2.699")
+        result = invoke_cli("--spot-file", str(path))
+        assert result.exit_code == 1
+        assert "error" in json.loads(result.output)
+
+    def test_profile_without_coordinates_exits_1(self, tmp_path):
+        path = tmp_path / "spot.yaml"
+        path.write_text("name: Nowhere\nfacing_deg: 270\n")
+        result = invoke_cli("--spot-file", str(path))
+        assert result.exit_code == 1
+        assert "error" in json.loads(result.output)
+
+    def test_no_spot_file_and_no_coordinates_still_exits_1(self):
+        result = invoke_cli("--spot-name", "Mundaka")
+        assert result.exit_code == 1
+        assert "error" in json.loads(result.output)
+
+
+class TestCliSurferFile:
+    @pytest.fixture
+    def surfer_path(self, tmp_path):
+        path = tmp_path / "surfer.yaml"
+        path.write_text(SURFER_PROFILE_YAML)
+        return str(path)
+
+    def run(self, *extra):
+        return invoke_cli("--coordinates", "43.407,-2.699", "--spot-name", "Mundaka", *extra)
+
+    def test_surfer_units_apply(self, patched_fetchers, surfer_path):
+        result = self.run("--surfer-file", surfer_path)
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["units"]["system"] == "imperial"
+
+    def test_units_flag_overrides_surfer(self, patched_fetchers, surfer_path):
+        result = self.run("--surfer-file", surfer_path, "--units", "metric")
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["units"]["system"] == "metric"
+
+    def test_surfer_without_units_defaults_metric(self, patched_fetchers, tmp_path):
+        path = tmp_path / "surfer.yaml"
+        path.write_text(SURFER_PROFILE_YAML.replace("units: imperial\n", ""))
+        result = self.run("--surfer-file", str(path))
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["units"]["system"] == "metric"
+
+    def test_missing_surfer_file_exits_1(self):
+        result = self.run("--surfer-file", "/nonexistent/surfer.yaml")
+        assert result.exit_code == 1
+        assert "error" in json.loads(result.output)
+
+    def test_invalid_surfer_units_exit_1(self, tmp_path):
+        path = tmp_path / "surfer.yaml"
+        path.write_text("units: nautical\n")
+        result = self.run("--surfer-file", str(path))
+        assert result.exit_code == 1
+        assert "error" in json.loads(result.output)
+
+
+class _FakeResponse:
+    def __init__(self, text="", payload=None, status_code=200):
+        self.text = text
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        pass
+
+
+class TestFetchBuoyPinned:
+    """The spot profile pins the buoy that research found representative:
+    the fetch goes straight to that station, no station-list download."""
+
+    def test_ndbc_station_fetched_directly(self, monkeypatch):
+        seen = {}
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url, **kwargs):
+                seen["url"] = url
+                return _FakeResponse(text=TestParseNdbcRealtime.SAMPLE)
+
+        monkeypatch.setattr(fetch_conditions.httpx, "Client", FakeClient)
+        cfg = {"network": "NOAA NDBC", "station_id": "46026", "name": "SF Bar", "distance_km": 30.0}
+        result = fetch_conditions.fetch_buoy_pinned(cfg)
+        assert "46026" in seen["url"]
+        assert result["wave_height_m"] == 1.5
+        assert result["station"]["id"] == "46026"
+        assert result["station"]["name"] == "SF Bar"
+        assert result["station"]["distance_km"] == 30.0
+        assert "station=46026" in result["station"]["url"]
+
+    def test_portus_station_fetched_directly(self, monkeypatch):
+        seen = {}
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def post(self, url, **kwargs):
+                seen["url"] = url
+                return _FakeResponse(payload=TestParsePortusLastdata.LASTDATA)
+
+        monkeypatch.setattr(fetch_conditions.httpx, "Client", FakeClient)
+        cfg = {"network": "Puertos del Estado", "station_id": "2136", "name": "Boya de Bilbao-Vizcaya"}
+        result = fetch_conditions.fetch_buoy_pinned(cfg)
+        assert "2136" in seen["url"]
+        assert result["wave_height_m"] == 0.7
+        assert result["station"]["id"] == "2136"
+        assert result["station"]["name"] == "Boya de Bilbao-Vizcaya"
+
+    def test_unknown_network_errors(self):
+        result = fetch_conditions.fetch_buoy_pinned({"network": "CANDHIS", "station_id": "1"})
+        assert "error" in result
+        assert result["note"], "degradation contract requires a manual-fallback note"
+
+    def test_missing_station_id_errors(self):
+        result = fetch_conditions.fetch_buoy_pinned({"network": "NOAA NDBC"})
+        assert "error" in result
+
+    def test_station_not_reporting_errors(self, monkeypatch):
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url, **kwargs):
+                return _FakeResponse(text="")
+
+        monkeypatch.setattr(fetch_conditions.httpx, "Client", FakeClient)
+        result = fetch_conditions.fetch_buoy_pinned({"network": "NOAA NDBC", "station_id": "46026"})
+        assert "error" in result
+        assert result["note"]
+
+
+class TestAssetTemplates:
+    """The shipped templates must load through the CLI: the schema the skill
+    writes and the schema the script reads are the same file."""
+
+    ASSETS = Path(__file__).resolve().parent.parent / "assets"
+
+    def test_spot_profile_template_loads_through_cli(self, patched_fetchers, monkeypatch):
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_pinned", lambda cfg: BUOY_SI)
+        result = invoke_cli("--spot-file", str(self.ASSETS / "spot-profile-template.yaml"))
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["spot"]["name"]
+        assert data["spot"]["facing_deg"] is not None
+        assert data["spot"]["profile"]["last_researched"]
+
+    def test_surfer_template_loads_through_cli(self, patched_fetchers):
+        result = invoke_cli(
+            "--coordinates", "43.407,-2.699",
+            "--spot-name", "Mundaka",
+            "--surfer-file", str(self.ASSETS / "surfer-template.yaml"),
+        )
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["units"]["system"] == "metric"
 
 
 @pytest.mark.skipif(

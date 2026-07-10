@@ -36,6 +36,9 @@
 {If facing was estimated rather than confirmed:}
 **Faces:** {facing_compass} (estimated from coastline geometry; not confirmed by a guide). See Information Gaps.
 
+{If the conditions payload carries spot.profile (this research run started from an existing spot profile):}
+**Spot profile:** previous research {spot.profile.last_researched} ({spot.profile.age_days} days before this run); the profile was updated by this research.
+
 **Sources:** [Surfline]({surfline_url}){, [Wannasurf]({wannasurf_url}) if found}{, [surf-forecast.com]({surf_forecast_url}) if found}{, [Wikipedia]({wikipedia_url}) if found}
 
 ## This Week's Outlook
@@ -52,7 +55,12 @@
 - Compute day-of-week from the ACTUAL date. Open-Meteo returns local dates (timezone=auto); use them directly, do NOT recompute from UTC.
 - **Verdicts must reference the spot's works-on profile, not just surf_windows.rating.** A generic "good" that arrives from outside the spot's swell window, over its size ceiling, or on the wrong tide is a 🔴 Skip or 🟡 Worth a check, and the reasoning must say why.
 - The best window is keyed to tide + wind + daylight together (start from surf_windows.best_time, then shift toward the spot's ideal tide and away from the onshore sea breeze). It MUST fall between first_light and last_light.
-- Use 🟢 Go only when swell direction/size/period, wind, and tide line up for this specific break. Use 🟡 when it is marginal or short-lived. Use 🔴 when it is flat, blown out, closed out, or out of the swell window.}
+- Use 🟢 Go only when swell direction/size/period, wind, and tide line up for this specific break. Use 🟡 when it is marginal or short-lived. Use 🔴 when it is flat, blown out, closed out, or out of the swell window.
+- **If a surfer profile (`surfer_profile` in the data package) is present, verdicts are for THAT surfer, not a generic expert:** weigh their skill level and comfort zone (a small clean day can be a 🟢 Go for a beginner; a day past their comfort zone is a 🔴 Skip for them even when the wave itself is firing), and respect their target days and scheduling notes.}
+
+{If surfer_profile is present in the data package, add after the table (MANDATORY in that case):}
+
+**Bottom line for your day:** {2-4 sentences addressed directly to this surfer. Name the single best call for their target day(s): where/when to paddle or why to skip, referencing their skill level and comfort zone. Name the board from their quiver that fits the conditions (e.g. "bring the fish; the daily driver will bog in this weak swell"). If their level and the spot mismatch, say so plainly and point at the profile's nearby alternative if one exists.}
 
 ## Current Conditions
 
@@ -238,7 +246,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 ## Post-Session
 
-After you surf it, log the session. It teaches you the spot faster than any forecast: you learn how the real wave tracked against the prediction. A structured template is available at:
+After you surf it, log the session as `sessions/{date}-{spot-slug}.md` in your surf folder. It teaches you the spot faster than any forecast: you learn how the real wave tracked against the prediction. A structured template is available at:
 `skills/spot-researcher/assets/session-log-template.md`
 
 It covers: conditions as experienced vs forecast, how the forecast verified, board and wetsuit, crowd, hazards, wave count and quality, and notes for next time.

@@ -1,0 +1,30 @@
+# Surfer profile - who the verdicts are for. Copy this file to the root of
+# your surf folder (the directory you run the surfing commands from) as
+# surfer.yaml and edit it. Every verdict references it: a small clean day can
+# be a Go for a beginner, and a day past your comfort zone is a Skip for you
+# even when the wave itself is world-class.
+
+name: Elena
+skill_level: intermediate # beginner / intermediate / advanced / expert
+comfort: confident up to ~1.5 m clean faces; avoid heavy hollow waves and strong rips
+
+boards: # verdicts name the board from this quiver that fits the day
+  - name: daily driver
+    type: shortboard
+    length: 6'2"
+    volume_l: 32
+    best_in: 0.8-2 m with some push
+  - name: small-day board
+    type: fish
+    length: 5'10"
+    volume_l: 34
+    best_in: 0.5-1 m, weak or mushy
+
+home_spots: # your usual spots (spots/<slug>.yaml slugs); multi-spot commands will sweep these by default
+  - mundaka
+  - la-salvaje-sopelana
+
+units: metric # metric / imperial; the --units flag overrides this
+target_days: [saturday, sunday] # default target days when a check names none
+dawn_patrol: true # first-light sessions are on the table
+notes: weekday sessions must end by 09:00

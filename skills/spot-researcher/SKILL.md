@@ -9,6 +9,15 @@ Research surf spots worldwide and generate comprehensive spot reports combining 
 
 **Data Sources:** This skill aggregates information from specialized surf websites (Surfline, Wannasurf, surf-forecast.com, SurferToday) plus free marine data APIs (Open-Meteo Marine, buoy observations from a regional network registry - NOAA NDBC in the US, Puertos del Estado in Spain - and NOAA CO-OPS tides). Report quality depends on how well-documented the spot is. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern. Tide predictions are automatic for US spots (NOAA) and, when the optional `WORLDTIDES_KEY` environment variable is set, for the rest of the world via WorldTides; otherwise non-US spots get a documented gap with manual lookup links.
 
+## Surf Folder
+
+The plugin reads and writes everything relative to the user's working directory (the "surf folder"), no hidden state elsewhere:
+
+- `surfer.yaml` - the surfer profile: skill level, comfort zone, boards, home spots, unit preference, target-day defaults (example to copy: `assets/surfer-template.yaml`). When present, verdicts are made for this surfer, not a generic expert, and its `units` preference applies (precedence: `--units` flag, then surfer profile, then metric).
+- `spots/<slug>.yaml` - one spot profile per researched spot (schema: `assets/spot-profile-template.yaml`): works-on profile, coordinates, facing, tide source, pinned buoy, webcams, hazard one-liners, `last_researched`. Every research run writes or updates it (Phase 7). Profiles never expire: always state the profile's age when using one, and suggest re-research past ~6 months.
+- `reports/` - generated reports, named `{target-date}-{spot-slug}-{verdict}.md`.
+- `sessions/` - the surfer's own session logs.
+
 ## When to Use This Skill
 
 Use this skill when the user requests:
@@ -38,13 +47,18 @@ Research Progress:
 - [ ] Phase 4: Spot Analysis (works-on profile, forecast match, hazards)
 - [ ] Phase 5: Report Generation (Report Writer agent)
 - [ ] Phase 6: Report Review & Validation (Report Reviewer agent)
-- [ ] Phase 7: Completion (user notified, next steps provided)
+- [ ] Phase 7: Spot Profile Update (spots/<slug>.yaml written or updated)
+- [ ] Phase 8: Completion (user notified, next steps provided)
 
 ## Orchestration Workflow
 
 ### Phase 1: Spot Identification
 
 **Goal:** Identify and validate the specific surf spot, and obtain coordinates.
+
+0. **Read the surf folder first:**
+   - If `surfer.yaml` exists in the working directory, read it: it personalizes the Phase 4 verdicts and the report, and supplies the units preference (pass `--surfer-file` in Phase 3A).
+   - If `spots/<slug>.yaml` exists for the requested spot (check `spots/` for a slugified match), read it: coordinates and facing come from the profile (skip the triangulation below and Phase 2), tell the user the profile's age, and treat this run as a re-research that will update the profile in Phase 7.
 
 1. **Extract Spot Name** from user message
    - Look for spot names, beach names, or region + break combos
@@ -99,7 +113,7 @@ uv run python fetch_conditions.py \
   --days 7
 ```
 
-Optional args: `--units metric|imperial` (default metric: heights m, wind km/h, temps °C; imperial: ft, kn, °F - pass `imperial` when the user asked for it); `--target-day YYYY-MM-DD` keys the report filename to the day the user intends to surf (defaults to the forecast window's first day); `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--days` 1-7 (default 7).
+Optional args: `--spot-file {path/to/spots/slug.yaml}` loads coordinates, name, facing, tide station, and pinned buoy from an existing spot profile (pass it instead of `--coordinates`/`--spot-name`/`--facing` when a profile exists; use the absolute path, the surf folder is the user's working directory, not the tools directory); `--surfer-file {path/to/surfer.yaml}` applies the surfer profile's units preference; `--units metric|imperial` (precedence: flag, then surfer profile, then metric; metric = heights m, wind km/h, temps °C; imperial = ft, kn, °F); `--target-day YYYY-MM-DD` keys the report filename to the day the user intends to surf (when the user names no day and `surfer.yaml` sets `target_days`, pass the next date matching one of them; otherwise it defaults to the forecast window's first day); `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--days` 1-7 (default 7).
 
 Optional environment: `WORLDTIDES_KEY` enables station-grade tide extremes from WorldTides for spots outside NOAA coverage (heights on chart datum). Without it, non-US spots report a tide gap.
 
@@ -107,7 +121,7 @@ All JSON keys are unit-neutral; read the actual units from the payload's `units`
 
 This returns JSON with:
 
-- **spot**: echo of inputs + `facing_compass` + `timezone`
+- **spot**: echo of inputs + `facing_compass` + `timezone`; when `--spot-file` was passed, also `profile` (`path`, `last_researched`, `age_days`, `reresearch_suggested` - true past ~6 months; profiles never expire, so this only prompts a suggestion to re-research)
 - **units**: the units in effect - `system` ("metric"/"imperial") plus display labels `wave_height`, `tide_height`, `wind_speed`, `temperature`
 - **report**: report naming inputs - `directory` ("reports"), `target_date` (the target day, falling back to the forecast window's first day - never the run date; null when neither is known), `spot_slug`, and `filenames` (the exact report path per verdict slug, e.g. `{"go": "reports/2026-07-11-mundaka-go.md", "check": ..., "skip": ...}`)
 - **marine**: per-day forecast. Each day has `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local): `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type` (offshore/onshore/cross-shore/light; requires `--facing`), and `quality` (`score` 0-10 + `rating` flat/poor/fair/good/epic; requires `--facing`)
@@ -348,6 +362,7 @@ This is the core judgment step - the script's generic `quality` ratings must be 
 3. Cross-reference **tides**: overlay tide events on the daily surf windows. If the spot needs mid-incoming, shift each day's recommended session time toward the matching tide, even if the raw wind score peaked elsewhere.
 4. Cross-check the **buoy observation** against today's model forecast. If the buoy shows 1.5 m at 18 s and the model says 0.6 m at 9 s, trust the buoy and note the discrepancy. Interpret the direction of the disagreement: a long-period reading inside the spot's swell window means MORE rideable energy than the model suggests (upside), not just uncertainty.
 5. Produce a **"This Week's Outlook"**: per-day verdict (skip / worth a check / go) with the best session time and one-line reasoning that references tide + wind + swell together.
+6. **Personalize for the surfer** (when `surfer.yaml` exists): verdicts are for THIS surfer, not a generic expert. Weigh their skill level and comfort zone (a small clean day is a Go for a beginner; a day past their comfort zone is a Skip for them even when the wave is world-class), name the board from their quiver that fits each Go / Worth-a-check day, and respect their scheduling constraints (target days, dawn-patrol willingness, notes).
 
 #### Step 4C: Hazard Synthesis
 
@@ -377,7 +392,7 @@ Explicitly document what was **not found or unreliable:**
 
 #### Step 5A: Prepare Data Package
 
-Organize all gathered and analyzed data into structured JSON (conditions + spot_data + analysis + gaps, per Step 3C plus Phase 4 outputs).
+Organize all gathered and analyzed data into structured JSON (conditions + spot_data + analysis + gaps, per Step 3C plus Phase 4 outputs). When `surfer.yaml` exists, include its contents as `surfer_profile` so the writer can render the "Bottom line for your day" block.
 
 #### Step 5B: Dispatch Report Writer Agent
 
@@ -519,18 +534,38 @@ Task(
 - **PASS or PASS_WITH_FIXES:** Proceed to Phase 7 with the `report_path`
 - **FAIL:** Present `remaining_issues` to the user and ask for guidance
 
-### Phase 7: Completion
+### Phase 7: Spot Profile Update
+
+**Goal:** Persist what research learned, so future conditions checks skip re-research and correct verdicts to this break.
+
+Write or update `spots/{spot_slug}.yaml` in the user's working directory (create `spots/` if missing; the slug is the same slugified name used for report filenames), following the schema in `{repo_root}/skills/spot-researcher/assets/spot-profile-template.yaml`:
+
+- `name`, `region`, `coordinates`, `facing_deg` from Phases 1-2
+- `tide_source` + `tide_station`: the source that served the tides (`tide_station` is the NOAA CO-OPS station id when NOAA served them, otherwise null)
+- `buoy`: pinned from the conditions payload's `buoy.station` (`network` is the registry name, e.g. "NOAA NDBC" or "Puertos del Estado", plus `station_id`, `name`, `distance_km`); omit the block when no buoy was in range
+- `works_on` from Step 4A (swell direction, size range, minimum period, wind, tide, season)
+- `break` (type, bottom, direction, ability)
+- `hazards` as one-liners from Step 4C
+- `webcams` (free ones first)
+- `notes`: anything a future quick check must know (tide windows, localism, seasonal character)
+- `last_researched`: today's date
+
+If the profile already exists, update it in place, preserving hand-edits that don't conflict with fresh findings; where they conflict, fresh research wins and the change is worth mentioning to the user.
+
+`fetch_conditions.py --spot-file` reads exactly this schema (the pytest suite loads the template through the CLI); changing the schema means changing the template, the script, and this section together.
+
+### Phase 8: Completion
 
 Report to user:
 
 1. **Success message:** "Spot research complete for {Spot Name}"
-2. **File location:** Full absolute path to the generated report
+2. **File locations:** Full absolute path to the generated report, and the spot profile written/updated in Phase 7
 3. **Summary:** 2-3 sentences - break type and skill level, this week's best window, key hazards or gaps
 4. **Next steps:** Encourage the user to:
    - Check the free webcam (if found) before driving
    - Verify conditions on-site - forecasts miss local effects
-   - Re-run `/surfing:conditions {spot}` the morning of for fresh numbers
-   - **Post-session log**: offer `skills/spot-researcher/assets/session-log-template.md` as a starting point for logging the session
+   - Re-run `/surfing:conditions {spot}` the morning of for fresh numbers - now instant and spot-corrected via the saved profile
+   - **Post-session log**: offer `skills/spot-researcher/assets/session-log-template.md` as a starting point for logging the session into `sessions/{date}-{spot_slug}.md` in the surf folder
 
 **Example completion message:**
 
@@ -538,6 +573,7 @@ Report to user:
 Spot research complete for Ocean Beach (SF)!
 
 Report saved to: reports/2026-07-09-ocean-beach-sf-go.md
+Spot profile saved to: spots/ocean-beach-sf.yaml (future conditions checks skip re-research)
 
 Summary: Ocean Beach is a heavy, shifty beach break for advanced surfers - powerful rips,
 cold water (14°C, 4/3 + booties), no channel. Best window this week is Thursday 08:00 on
@@ -608,11 +644,13 @@ uv run python fetch_conditions.py \
 
 **Options:**
 
-- `--coordinates "lat,lon"` (required) - point in the water near the break
-- `--spot-name` (required)
+- `--coordinates "lat,lon"` (required unless `--spot-file` provides them) - point in the water near the break
+- `--spot-name` (required unless `--spot-file` provides it)
+- `--spot-file PATH` (optional) - spot profile (`spots/<slug>.yaml`); supplies coordinates, name, facing, tide station, and pinned buoy. Explicit flags override. Pass an absolute path: the surf folder is the user's working directory, not the tools directory
+- `--surfer-file PATH` (optional) - surfer profile (`surfer.yaml`); supplies the units preference
 - `--facing N` (optional) - degrees true the spot faces out to sea; enables `wind_type`, `quality`, `surf_windows`
 - `--days N` (optional, default 7, max 7)
-- `--units metric|imperial` (optional, default metric) - output units; precedence: flag, then surfer profile (once it exists), then metric
+- `--units metric|imperial` (optional) - output units; precedence: flag, then surfer profile, then metric
 - `--target-day YYYY-MM-DD` (optional) - the day the user intends to surf; keys `report.target_date` (defaults to the forecast window's first day)
 - `--tide-station ID` (optional) - NOAA CO-OPS station override
 - `WORLDTIDES_KEY` (optional environment variable) - enables WorldTides tide extremes (chart datum) outside NOAA coverage
@@ -636,4 +674,4 @@ uv run python fetch_conditions.py \
 
 ---
 
-**Skill Version:** 0.2.0 | **Last Updated:** 2026-07-10
+**Skill Version:** 0.3.0 | **Last Updated:** 2026-07-10

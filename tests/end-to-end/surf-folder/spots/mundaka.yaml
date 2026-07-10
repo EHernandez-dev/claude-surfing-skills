@@ -1,0 +1,51 @@
+# Spot profile written from the 2026-07-08 /surfing:research run at Mundaka
+# (see ../../2026-07-08-mundaka.md). Input fixture for the cached-flow e2e.
+
+name: Mundaka
+region: Bizkaia, Basque Country, Spain
+coordinates: [43.4095, -2.6995]
+facing_deg: 350
+
+tide_source: WorldTides
+tide_station: null
+
+buoy:
+  network: Puertos del Estado
+  station_id: "2136"
+  name: Boya de Bilbao-Vizcaya
+  distance_km: 36.0
+
+works_on:
+  swell_direction: NW
+  swell_size: "1.0-1.5 m minimum to break, best 2-3 m faces, holds 4 m+"
+  min_period_s: 12
+  wind: S-SW offshore
+  tide: low to mid, best on the push just after the low turn
+  season: October-March
+
+break:
+  type: rivermouth
+  bottom: sand
+  direction: left
+  ability: advanced
+
+hazards:
+  - Strong tidal rip along the estuary channel, strongest on the outgoing tide
+  - Rock exposure at the harbor-wall entry and the church-stairs exit
+  - Steep sucking takeoff onto a shallow sandbar; long hold-downs when big
+  - Heavy localism reputation; narrow takeoff zone, wait your turn
+
+webcams:
+  - name: surf-forecast.com Mundaka cam
+    url: https://www.surf-forecast.com/breaks/Mundaka/webcams/latest
+    free: true
+  - name: Windfinder Mundaka webcams
+    url: https://www.windfinder.com/webcams/mundaka
+    free: true
+
+notes: >-
+  Tide-windowed (~2 h around low-to-mid). Summer is mostly flat; it is an
+  autumn/winter wave. Beginner alternatives across the estuary: Playa de
+  Laida, Playa de Laga, Laidatxu (in-town).
+
+last_researched: 2026-07-08

@@ -1,0 +1,27 @@
+# Surfer profile for the cached-flow e2e (copied from
+# skills/spot-researcher/assets/surfer-template.yaml and edited).
+
+name: Elena
+skill_level: intermediate
+comfort: confident up to ~1.5 m clean faces; avoid heavy hollow waves and strong rips
+
+boards:
+  - name: daily driver
+    type: shortboard
+    length: 6'2"
+    volume_l: 32
+    best_in: 0.8-2 m with some push
+  - name: small-day board
+    type: fish
+    length: 5'10"
+    volume_l: 34
+    best_in: 0.5-1 m, weak or mushy
+
+home_spots:
+  - mundaka
+  - la-salvaje-sopelana
+
+units: metric
+target_days: [saturday, sunday]
+dawn_patrol: true
+notes: weekday sessions must end by 09:00
