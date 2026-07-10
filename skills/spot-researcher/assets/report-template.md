@@ -95,17 +95,17 @@ No buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and
 
 ### Tides
 
-{If NOAA tide data available:}
-Predictions from **[{tides.station.name}]({tides.station.url})** ({tides.station.distance_km} km away). Heights are {units.tide_height} relative to **{tides.datum}** (mean lower low water).
+{If tide data available:}
+Predictions from **{tides.source}**{if tides.station: , station **[{tides.station.name}]({tides.station.url})**{if tides.station.distance_km: ({tides.station.distance_km} km away)}}. Heights are {units.tide_height} relative to **{tides.datum}** ({"mean lower low water" for MLLW, "chart datum, as printed in local tide tables" for CD}).
 
 | Date | Highs | Lows |
 |------|-------|------|
 | {Day} {Mon} {DD} | {HH:MM ({height} {units.tide_height}), ...} | {HH:MM ({height} {units.tide_height}), ...} |
 
-{Instruction: overlay these tides on the session windows in This Week's Outlook. If the spot needs a specific tide (e.g. mid-incoming), the recommended window must land on it.}
+{Instruction: overlay these tides on the session windows in This Week's Outlook. If the spot needs a specific tide (e.g. mid-incoming), the recommended window must land on it. If tides.copyright is present (WorldTides), reproduce it as a small attribution line under the table.}
 
-{If tides unavailable (non-US spot):}
-**No automated tide data.** {tides.note} NOAA CO-OPS covers US coasts only. Look up tides manually at [tide-forecast.com](https://www.tide-forecast.com/locations/{location-slug}/tides/latest) and overlay them on the session windows yourself.
+{If tides unavailable (non-US spot without a WorldTides key):}
+**No automated tide data.** {tides.note} NOAA CO-OPS covers US coasts only and no `WORLDTIDES_KEY` was set. Look up tides manually at [tide-forecast.com](https://www.tide-forecast.com/locations/{location-slug}/tides/latest) and overlay them on the session windows yourself.
 
 ### Water Temp & Wetsuit
 
@@ -217,7 +217,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 {Explicit checklist of what was NOT found or is uncertain. MANDATORY items to check and include where they apply:}
 
-- {If non-US spot: "No automated tide data (spot outside NOAA coverage). Tides must be checked manually at tide-forecast.com."}
+- {If non-US spot and tides gapped out: "No automated tide data (spot outside NOAA coverage, no WORLDTIDES_KEY set). Tides must be checked manually at tide-forecast.com."}
 - {If facing was estimated: "Facing direction was estimated from coastline geometry, not confirmed by a spot guide. Wind offshore/onshore classification may be off."}
 - {If facing was not provided at all: "Wind classification and surf windows were not computed (--facing not passed). Wind shown as raw direction/speed only."}
 - {If no recent session reports: "No recent session reports found; conditions not ground-truthed by first-hand accounts."}
@@ -233,7 +233,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 - Open-Meteo Marine (swell/wind/water temp forecast)
 - {buoy network + station {id} if available, e.g. "NOAA NDBC buoy 46026" or "Puertos del Estado buoy 1103"}
-- {NOAA CO-OPS tides station {id} if available}
+- {tide source if available, e.g. "NOAA CO-OPS tides station {id}" or "WorldTides (chart datum)"}
 - {Surfline / Wannasurf / surf-forecast.com / Wikipedia / Reddit / webcams as consulted, each with URL}
 
 ## Post-Session

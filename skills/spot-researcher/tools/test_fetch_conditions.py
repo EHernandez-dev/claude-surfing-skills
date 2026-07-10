@@ -25,6 +25,7 @@ from fetch_conditions import (
     parse_coordinates,
     parse_ndbc_realtime,
     parse_portus_lastdata,
+    parse_worldtides_extremes,
     rate_block,
     report_filename,
     slugify,
@@ -449,6 +450,200 @@ class TestBuoyNetworkRegistry:
         assert result["note"], "degradation contract requires a manual-fallback note"
 
 
+class TestParseWorldtidesExtremes:
+    """Fixture mirrors the WorldTides v3 extremes response shape (datum=CD,
+    localtime requested so `date` carries the spot's local offset)."""
+
+    PAYLOAD = {
+        "status": 200,
+        "requestDatum": "CD",
+        "responseDatum": "CD",
+        "station": "Bermeo, Spain",
+        "copyright": "Tidal data retrieved from www.worldtides.info",
+        "extremes": [
+            {"dt": 1783051920, "date": "2026-07-10T04:12+0200", "height": 4.113, "type": "High"},
+            {"dt": 1783074660, "date": "2026-07-10T10:31+0200", "height": 0.542, "type": "Low"},
+            {"dt": 1783141320, "date": "2026-07-11T05:02+0200", "height": 4.35, "type": "High"},
+        ],
+    }
+
+    def test_groups_events_by_local_date(self):
+        tides = parse_worldtides_extremes(self.PAYLOAD)
+        assert [d["date"] for d in tides["days"]] == ["2026-07-10", "2026-07-11"]
+        first_day = tides["days"][0]["events"]
+        assert first_day == [
+            {"time": "04:12", "height_m": 4.113, "type": "high"},
+            {"time": "10:31", "height_m": 0.542, "type": "low"},
+        ]
+
+    def test_datum_and_source_echoed(self):
+        tides = parse_worldtides_extremes(self.PAYLOAD)
+        assert tides["datum"] == "CD"
+        assert tides["source"] == "WorldTides"
+
+    def test_station_and_copyright_carried_when_present(self):
+        tides = parse_worldtides_extremes(self.PAYLOAD)
+        assert tides["station"]["name"] == "Bermeo, Spain"
+        assert "worldtides.info" in tides["copyright"]
+
+    def test_atlas_response_without_station(self):
+        payload = {k: v for k, v in self.PAYLOAD.items() if k != "station"}
+        tides = parse_worldtides_extremes(payload)
+        assert "station" not in tides
+        assert tides["days"], "extremes must still parse without a named station"
+
+
+class TestTideSourceLadder:
+    """NOAA CO-OPS stays primary where it has a station; WorldTides steps in
+    only when NOAA gaps out AND WORLDTIDES_KEY is set; no key degrades to the
+    manual-fallback note (ADR 0001)."""
+
+    NOAA_OK = {
+        "source": "NOAA CO-OPS",
+        "station": {"id": "9414290", "url": "https://example.test"},
+        "datum": "MLLW",
+        "days": [{"date": "2026-07-10", "events": [{"time": "04:12", "height_m": 1.2, "type": "high"}]}],
+    }
+    NOAA_GAP = {"error": "Nearest NOAA station is 5000 km away", "note": fetch_conditions.TIDE_FALLBACK_NOTE}
+    WORLDTIDES_OK = {
+        "source": "WorldTides",
+        "datum": "CD",
+        "days": [{"date": "2026-07-10", "events": [{"time": "04:12", "height_m": 4.1, "type": "high"}]}],
+    }
+
+    def test_noaa_primary_even_with_key_set(self, monkeypatch):
+        calls = []
+        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_OK)
+        monkeypatch.setattr(
+            fetch_conditions,
+            "fetch_tides_worldtides",
+            lambda lat, lon, days, key: calls.append("wt") or self.WORLDTIDES_OK,
+        )
+        assert fetch_conditions.fetch_tides(43.4, -2.7, 2) == self.NOAA_OK
+        assert calls == [], "WorldTides must not be polled when NOAA delivers"
+
+    def test_worldtides_when_noaa_gaps_and_key_set(self, monkeypatch):
+        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_tides_worldtides", lambda lat, lon, days, key: self.WORLDTIDES_OK
+        )
+        assert fetch_conditions.fetch_tides(43.4, -2.7, 2) == self.WORLDTIDES_OK
+
+    def test_key_passed_from_environment(self, monkeypatch):
+        seen = []
+        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
+        monkeypatch.setattr(
+            fetch_conditions,
+            "fetch_tides_worldtides",
+            lambda lat, lon, days, key: seen.append(key) or self.WORLDTIDES_OK,
+        )
+        fetch_conditions.fetch_tides(43.4, -2.7, 2)
+        assert seen == ["sekret123"]
+
+    def test_no_key_degrades_to_manual_note(self, monkeypatch):
+        monkeypatch.delenv("WORLDTIDES_KEY", raising=False)
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
+        monkeypatch.setattr(
+            fetch_conditions,
+            "fetch_tides_worldtides",
+            lambda lat, lon, days, key: pytest.fail("WorldTides must not be called without a key"),
+        )
+        result = fetch_conditions.fetch_tides(43.4, -2.7, 2)
+        assert result["error"] == self.NOAA_GAP["error"]
+        assert "WORLDTIDES_KEY" in result["note"]
+        assert "tide-forecast.com" in result["note"]
+
+    def test_both_sources_failing_aggregates_errors(self, monkeypatch):
+        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
+        monkeypatch.setattr(
+            fetch_conditions,
+            "fetch_tides_worldtides",
+            lambda lat, lon, days, key: {"error": "WorldTides request failed", "note": "n"},
+        )
+        result = fetch_conditions.fetch_tides(43.4, -2.7, 2)
+        assert "5000 km away" in result["error"] and "WorldTides request failed" in result["error"]
+        assert result["note"], "degradation contract requires a manual-fallback note"
+
+
+class TestWorldtidesKeySafety:
+    """The key comes from the environment only and must never leak into the
+    payload: httpx exceptions embed the request URL, key and all."""
+
+    KEY = "sekret-key-123"
+
+    def test_transport_error_never_leaks_key(self, monkeypatch):
+        class RaisingClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url, params=None):
+                raise RuntimeError(f"connect failed for {url}?key={params['key']}")
+
+        monkeypatch.setattr(fetch_conditions.httpx, "Client", RaisingClient)
+        result = fetch_conditions.fetch_tides_worldtides(43.4, -2.7, 2, self.KEY)
+        assert "error" in result
+        assert self.KEY not in json.dumps(result)
+
+    def test_url_encoded_key_never_leaks_either(self, monkeypatch):
+        # httpx exception text carries the percent-encoded request URL, a
+        # different spelling of the same secret
+        key = "sekret+key/123"
+        encoded = "sekret%2Bkey%2F123"
+
+        class RaisingClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url, params=None):
+                raise RuntimeError(f"connect failed for {url}?key={encoded}")
+
+        monkeypatch.setattr(fetch_conditions.httpx, "Client", RaisingClient)
+        result = fetch_conditions.fetch_tides_worldtides(43.4, -2.7, 2, key)
+        payload = json.dumps(result)
+        assert key not in payload
+        assert encoded not in payload
+
+    def test_api_error_payload_never_leaks_key(self, monkeypatch):
+        class Response:
+            def json(self):
+                return {"status": 400, "error": f"invalid key: {TestWorldtidesKeySafety.KEY}"}
+
+        class ErrorClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url, params=None):
+                return Response()
+
+        monkeypatch.setattr(fetch_conditions.httpx, "Client", ErrorClient)
+        result = fetch_conditions.fetch_tides_worldtides(43.4, -2.7, 2, self.KEY)
+        assert "error" in result
+        assert result["note"], "degradation contract requires a manual-fallback note"
+        assert self.KEY not in json.dumps(result)
+
+
 class TestSlugify:
     def test_basic(self):
         assert slugify("Mundaka") == "mundaka"
@@ -531,12 +726,25 @@ BUOY_SI = {
 }
 
 TIDES_SI = {
+    "source": "NOAA CO-OPS",
     "station": {"id": "9414290", "name": "Test Station", "state": "", "distance_km": 5.0, "url": "https://example.test"},
     "datum": "MLLW",
     "days": [
         {
             "date": "2026-07-10",
             "events": [{"time": "04:12", "height_m": 1.234, "type": "high"}],
+        }
+    ],
+}
+
+WORLDTIDES_SI = {
+    "source": "WorldTides",
+    "datum": "CD",
+    "station": {"name": "Bermeo, Spain", "url": "https://www.worldtides.info/"},
+    "days": [
+        {
+            "date": "2026-07-10",
+            "events": [{"time": "04:12", "height_m": 4.113, "type": "high"}],
         }
     ],
 }
@@ -637,6 +845,15 @@ class TestCliUnitsContract:
         assert data["surf_windows"], "expected surf windows with --facing"
         assert "swell_height" in data["surf_windows"][0]
 
+    def test_worldtides_shape_converts_and_echoes_datum(self, patched_fetchers, monkeypatch):
+        monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days: WORLDTIDES_SI)
+        metric = run_cli()
+        assert metric["tides"]["source"] == "WorldTides"
+        assert metric["tides"]["datum"] == "CD"
+        assert metric["tides"]["days"][0]["events"][0]["height"] == 4.11
+        imperial = run_cli("--units", "imperial")
+        assert imperial["tides"]["days"][0]["events"][0]["height"] == 13.5  # 4.113 m
+
 
 class TestCliReportNaming:
     def test_target_date_falls_back_to_window_start(self, patched_fetchers):
@@ -715,8 +932,10 @@ class TestIntegration:
         assert "days" in data["tides"], "expected NOAA tides for a US spot"
         assert data["sea_temperature"].get("wetsuit")
 
-    def test_non_us_spot_reports_tide_gap(self):
-        """Mundaka, Spain - marine data should work, NOAA tides should gap out."""
+    def test_non_us_spot_reports_tide_gap(self, monkeypatch):
+        """Mundaka, Spain - marine data should work; with no WorldTides key
+        NOAA tides gap out to the manual-fallback note."""
+        monkeypatch.delenv("WORLDTIDES_KEY", raising=False)
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -728,6 +947,21 @@ class TestIntegration:
         assert data["units"]["system"] == "metric"
         assert "error" in data["tides"]
         assert any("tides" in g for g in data["gaps"])
+
+    @pytest.mark.skipif(
+        not os.environ.get("WORLDTIDES_KEY"),
+        reason="Set WORLDTIDES_KEY to probe the live WorldTides API",
+    )
+    def test_non_us_spot_gets_worldtides_extremes_with_key(self):
+        """Mundaka, Spain - with a key the tide ladder lands on WorldTides."""
+        tides = fetch_conditions.fetch_tides(43.407, -2.699, 2)
+        assert "error" not in tides, tides
+        assert tides["source"] == "WorldTides"
+        assert tides["datum"] == "CD"
+        events = [e for day in tides["days"] for e in day["events"]]
+        assert events, "expected tide extremes"
+        assert {e["type"] for e in events} <= {"high", "low"}
+        assert all(isinstance(e["height_m"], float) for e in events)
 
     def test_basque_coast_gets_portus_buoy_observation(self):
         """Mundaka, Spain - observed wave data must come from Puertos del Estado."""

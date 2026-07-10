@@ -93,6 +93,10 @@ uv run python fetch_conditions.py \
 - `--target-day` (optional): The day (YYYY-MM-DD) the surfer intends to surf; keys `report.target_date`. Defaults to the forecast window's first day, never the run date
 - `--tide-station` (optional): NOAA CO-OPS station ID override, skips the nearest-station lookup
 
+**Environment:**
+
+- `WORLDTIDES_KEY` (optional): enables WorldTides tide extremes for spots outside NOAA coverage, heights on chart datum (ADR 0001). Read from the environment only; never appears in the output, including error messages
+
 **Output:**
 
 Returns unified JSON with these keys. All keys are unit-neutral; the `units` object states the units in effect:
@@ -102,7 +106,7 @@ Returns unified JSON with these keys. All keys are unit-neutral; the `units` obj
 - `report`: report naming inputs, `directory` ("reports"), `target_date` (target day, falling back to the forecast window's first day, never the run date; null when neither is known), `spot_slug`, `filenames` (exact report path per verdict slug: `go`/`check`/`skip`, following `reports/{target-date}-{spot-slug}-{verdict}.md`)
 - `marine.days[]`: per-day forecast, each with `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local) containing `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type`, and `quality` (`score` 0-10 + `rating`)
 - `buoy`: nearest buoy real observation from the regional network registry (NOAA NDBC in the US, Puertos del Estado on Spanish coasts), `station` (id, name, distance_km, url), `observed_at`, `wave_height`, `dominant_period_s`, `mean_wave_direction`, `wind_speed`, `wind_direction`, `water_temp`. Coastal stations may report height/period only (null direction/wind/temp). This is observed ground truth, cross-check the model forecast against it
-- `tides`: NOAA CO-OPS predictions, `station`, `datum` (MLLW), `days[]` with high/low `events[]` (`time`, `height`, `type`). **US only**, non-US spots return an `error` plus a fallback note
+- `tides`: high/low predictions from a source ladder, `source` ("NOAA CO-OPS" where a station is within range, else "WorldTides" when `WORLDTIDES_KEY` is set), `datum` ("MLLW" for NOAA, "CD" chart datum for WorldTides), `days[]` with high/low `events[]` (`time`, `height`, `type`), `station` (NOAA: id/name/distance_km/url; WorldTides: name + url when a named station backs the prediction), plus `copyright` on WorldTides responses. No nearby NOAA station and no key returns an `error` plus a fallback note
 - `sea_temperature`: `current`, `source` (prefers "buoy observation" over "model SST" when both exist), `model`, `buoy`, and a deterministic `wetsuit` recommendation
 - `daylight`: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours`
 - `weather`: per-day `conditions`, `icon`, `temp_max`/`temp_min`, `precip_probability_pct`, `uv_index_max`
@@ -113,7 +117,8 @@ Returns unified JSON with these keys. All keys are unit-neutral; the `units` obj
 
 - Open-Meteo Marine API (wave/swell height, period, direction, sea surface temperature)
 - Open-Meteo Forecast API (wind, air temp, precipitation, UV index)
-- NOAA CO-OPS (tide predictions, US stations only; non-US spots should use tide-forecast.com, or a WorldTides/Stormglass API key manually)
+- NOAA CO-OPS (tide predictions, US stations only)
+- WorldTides (tide extremes elsewhere, chart datum, behind the optional `WORLDTIDES_KEY`; ADR 0001. Unset key degrades to a tide-forecast.com fallback note)
 - Buoy network registry (nearest buoy real observations): NOAA NDBC everywhere it reaches, Puertos del Estado PORTUS (keyless, undocumented; ADR 0002) for Spanish coasts. Networks are tried in registry order for regions that cover the spot; adding a network is one registry entry, no JSON contract change. PORTUS polling is polite: one observation request per spot per run
 - astral (sunrise/sunset/twilight)
 

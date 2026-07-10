@@ -7,7 +7,7 @@ description: Research surf spots worldwide and generate comprehensive surf spot 
 
 Research surf spots worldwide and generate comprehensive spot reports combining data from multiple sources including Surfline, Wannasurf, surf-forecast.com, Open-Meteo marine forecasts, NOAA buoys and tide stations, and community session reports.
 
-**Data Sources:** This skill aggregates information from specialized surf websites (Surfline, Wannasurf, surf-forecast.com, SurferToday) plus free marine data APIs (Open-Meteo Marine, buoy observations from a regional network registry - NOAA NDBC in the US, Puertos del Estado in Spain - and NOAA CO-OPS tides). Report quality depends on how well-documented the spot is. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern. Tide predictions are automatic for US spots only (NOAA); non-US spots get a documented gap with manual lookup links.
+**Data Sources:** This skill aggregates information from specialized surf websites (Surfline, Wannasurf, surf-forecast.com, SurferToday) plus free marine data APIs (Open-Meteo Marine, buoy observations from a regional network registry - NOAA NDBC in the US, Puertos del Estado in Spain - and NOAA CO-OPS tides). Report quality depends on how well-documented the spot is. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern. Tide predictions are automatic for US spots (NOAA) and, when the optional `WORLDTIDES_KEY` environment variable is set, for the rest of the world via WorldTides; otherwise non-US spots get a documented gap with manual lookup links.
 
 ## When to Use This Skill
 
@@ -101,6 +101,8 @@ uv run python fetch_conditions.py \
 
 Optional args: `--units metric|imperial` (default metric: heights m, wind km/h, temps °C; imperial: ft, kn, °F - pass `imperial` when the user asked for it); `--target-day YYYY-MM-DD` keys the report filename to the day the user intends to surf (defaults to the forecast window's first day); `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--days` 1-7 (default 7).
 
+Optional environment: `WORLDTIDES_KEY` enables station-grade tide extremes from WorldTides for spots outside NOAA coverage (heights on chart datum). Without it, non-US spots report a tide gap.
+
 All JSON keys are unit-neutral; read the actual units from the payload's `units` object and label every quantity in the report with them.
 
 This returns JSON with:
@@ -110,7 +112,7 @@ This returns JSON with:
 - **report**: report naming inputs - `directory` ("reports"), `target_date` (the target day, falling back to the forecast window's first day - never the run date; null when neither is known), `spot_slug`, and `filenames` (the exact report path per verdict slug, e.g. `{"go": "reports/2026-07-11-mundaka-go.md", "check": ..., "skip": ...}`)
 - **marine**: per-day forecast. Each day has `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local): `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type` (offshore/onshore/cross-shore/light; requires `--facing`), and `quality` (`score` 0-10 + `rating` flat/poor/fair/good/epic; requires `--facing`)
 - **buoy**: nearest buoy real observation from the regional network registry (NOAA NDBC in the US, Puertos del Estado on Spanish coasts) - `station` (id, name, distance_km, url), `observed_at` (UTC), `wave_height`, `dominant_period_s`, `mean_wave_direction`, `wind_speed`, `wind_direction`, `water_temp`. Coastal stations may report wave height/period only (null direction/wind/temp). This is **observed ground truth** - cross-check the model forecast against it and flag disagreement
-- **tides**: NOAA CO-OPS predictions - `station` (id, name, distance_km, url), `datum` (MLLW), `days[]` with high/low `events[]` (`time`, `height`, `type`). **US only** - non-US spots return an `error` + note (tide-forecast.com / WorldTides fallback)
+- **tides**: high/low predictions from a source ladder - `source` ("NOAA CO-OPS" where a station is within range, else "WorldTides" when the `WORLDTIDES_KEY` environment variable is set), `datum` ("MLLW" for NOAA, "CD" chart datum for WorldTides - both match published tide tables), `days[]` with high/low `events[]` (`time`, `height`, `type`), and `station` (NOAA: id, name, distance_km, url; WorldTides: name + url when a named station backs the prediction, absent for atlas points). WorldTides responses also carry a `copyright` string. With no nearby NOAA station and no key, returns an `error` + `note` (tide-forecast.com fallback / set `WORLDTIDES_KEY`). The key is read from the environment only and never appears in the payload
 - **sea_temperature**: `current`, `source` ("buoy observation" preferred over "model SST" when both exist), `model`, `buoy`, and a deterministic `wetsuit` recommendation
 - **daylight**: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours` (dawn patrol planning)
 - **weather**: per-day air conditions - `conditions`, `icon`, `temp_max`/`temp_min`, `precip_probability_pct`, `uv_index_max`
@@ -363,7 +365,7 @@ Organize hazards by type with explicit, SEPARATE sub-sections - safety-critical,
 
 Explicitly document what was **not found or unreliable:**
 
-- No tide data (non-US spot) - link tide-forecast.com for the location
+- No tide data (non-US spot, no `WORLDTIDES_KEY`) - link tide-forecast.com for the location
 - Facing direction estimated rather than confirmed
 - No recent session reports
 - Conflicting ideal-tide claims between sources
@@ -613,6 +615,7 @@ uv run python fetch_conditions.py \
 - `--units metric|imperial` (optional, default metric) - output units; precedence: flag, then surfer profile (once it exists), then metric
 - `--target-day YYYY-MM-DD` (optional) - the day the user intends to surf; keys `report.target_date` (defaults to the forecast window's first day)
 - `--tide-station ID` (optional) - NOAA CO-OPS station override
+- `WORLDTIDES_KEY` (optional environment variable) - enables WorldTides tide extremes (chart datum) outside NOAA coverage
 
 ### Facing Direction Quick Reference
 
@@ -628,7 +631,8 @@ uv run python fetch_conditions.py \
 - NDBC buoy: `https://www.ndbc.noaa.gov/station_page.php?station={id}`
 - Puertos del Estado buoys (Spain): `https://portus.puertos.es/` (portal map; no per-station deep link)
 - NOAA tides: `https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={id}`
-- tide-forecast.com (non-US fallback): `https://www.tide-forecast.com/locations/{slug}/tides/latest`
+- tide-forecast.com (non-US fallback when `WORLDTIDES_KEY` is unset): `https://www.tide-forecast.com/locations/{slug}/tides/latest`
+- WorldTides portal: `https://www.worldtides.info/`
 
 ---
 

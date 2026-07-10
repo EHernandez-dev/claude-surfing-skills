@@ -13,6 +13,8 @@ Data sources:
 - Open-Meteo Marine API: wave/swell height, period, direction, sea surface temp
 - Open-Meteo Forecast API: wind, air temp, precipitation, UV index
 - NOAA CO-OPS: tide predictions (US stations only)
+- WorldTides: tide extremes elsewhere, on chart datum, when the optional
+  WORLDTIDES_KEY environment variable is set (ADR 0001)
 - Buoy observations from a region-keyed network registry (real observed waves
   + water temp): NOAA NDBC everywhere it reaches, Puertos del Estado (PORTUS)
   for Spanish coasts (ADR 0002)
@@ -21,9 +23,11 @@ Data sources:
 
 import json
 import math
+import os
 import re
 import sys
 import unicodedata
+import urllib.parse
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -35,6 +39,7 @@ MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 NOAA_STATIONS_URL = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
 NOAA_PREDICTIONS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+WORLDTIDES_URL = "https://www.worldtides.info/api/v3"
 NDBC_STATIONS_URL = "https://www.ndbc.noaa.gov/activestations.xml"
 NDBC_REALTIME_URL = "https://www.ndbc.noaa.gov/data/realtime2/{station_id}.txt"
 
@@ -71,10 +76,17 @@ UNIT_LABELS = {
 # Filename slugs for the per-day verdict (Go / Worth a check / Skip).
 VERDICT_SLUGS = ("go", "check", "skip")
 
+# Chart datum matches published European tide tables, mirroring NOAA's MLLW
+# (ADR 0001). WorldTides' default MSL would match no published table.
+WORLDTIDES_DATUM = "CD"
+
 TIDE_FALLBACK_NOTE = (
-    "NOAA CO-OPS covers US coasts only. For non-US spots check "
-    "https://www.tide-forecast.com or use a WorldTides/Stormglass API key manually."
+    "NOAA CO-OPS covers US coasts only. Set WORLDTIDES_KEY for station-grade "
+    "tide extremes elsewhere (https://www.worldtides.info), or check "
+    "https://www.tide-forecast.com manually."
 )
+
+WORLDTIDES_MANUAL_NOTE = "Check https://www.tide-forecast.com manually."
 
 COMPASS_POINTS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -358,11 +370,11 @@ def fetch_wind_weather(lat: float, lon: float, days: int) -> dict[str, Any]:
         }
 
 
-def fetch_tides(lat: float, lon: float, days: int) -> dict[str, Any]:
+def fetch_tides_noaa(lat: float, lon: float, days: int) -> dict[str, Any]:
     """Find nearest NOAA CO-OPS tide station and fetch high/low predictions.
 
     US coastal waters only - outside NOAA coverage this returns an error
-    entry so the skill can note the gap and link a manual source.
+    entry so the tide ladder can fall through to WorldTides or the gap note.
     """
     try:
         with httpx.Client(timeout=30.0) as client:
@@ -442,12 +454,110 @@ def _fetch_tide_predictions(station_id: str, days: int) -> dict[str, Any]:
         )
 
     return {
+        "source": "NOAA CO-OPS",
         "station": {
             "id": station_id,
             "url": f"https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={station_id}",
         },
         "datum": "MLLW",
         "days": [{"date": d, "events": evs} for d, evs in sorted(events.items())],
+    }
+
+
+def parse_worldtides_extremes(payload: dict[str, Any]) -> dict[str, Any]:
+    """Parse a WorldTides extremes response into the tides contract shape (SI).
+
+    Event `date` strings carry the spot's local time ("2026-07-10T04:12+0200",
+    from the `localtime` request param); heights are meters on the requested
+    datum, which the API echoes back in `responseDatum`.
+    """
+    events: dict[str, list[dict[str, Any]]] = {}
+    for extreme in payload.get("extremes", []):
+        date_key, time_part = extreme["date"].split("T")
+        events.setdefault(date_key, []).append(
+            {
+                "time": time_part[:5],
+                "height_m": float(extreme["height"]),
+                "type": extreme["type"].lower(),
+            }
+        )
+
+    result: dict[str, Any] = {
+        "source": "WorldTides",
+        "datum": payload.get("responseDatum", WORLDTIDES_DATUM),
+        "days": [{"date": d, "events": evs} for d, evs in sorted(events.items())],
+    }
+    if payload.get("station"):
+        result["station"] = {"name": payload["station"], "url": "https://www.worldtides.info/"}
+    if payload.get("copyright"):
+        result["copyright"] = payload["copyright"]
+    return result
+
+
+def _redact(text: str, key: str) -> str:
+    """Scrub the API key from error text; httpx exceptions embed the request
+    URL, query string and all, and WorldTides error strings may echo the key.
+    The URL form is percent-encoded, so scrub that spelling too."""
+    if not key:
+        return text
+    for form in (key, urllib.parse.quote(key, safe="")):
+        text = text.replace(form, "***")
+    return text
+
+
+def fetch_tides_worldtides(lat: float, lon: float, days: int, key: str) -> dict[str, Any]:
+    """Tide extremes from WorldTides on chart datum (ADR 0001), heights in meters.
+
+    The key is passed in by the caller (environment only) and must never
+    appear in the returned payload.
+    """
+    params = {
+        "extremes": "",
+        "date": "today",
+        "days": days,
+        "datum": WORLDTIDES_DATUM,
+        "localtime": "",
+        "lat": lat,
+        "lon": lon,
+        "key": key,
+    }
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(WORLDTIDES_URL, params=params)
+            payload = response.json()
+    except Exception as e:
+        return {
+            "error": _redact(f"WorldTides request failed: {e}", key),
+            "note": WORLDTIDES_MANUAL_NOTE,
+        }
+
+    if payload.get("status") != 200 or "extremes" not in payload:
+        api_error = payload.get("error", "no extremes in response")
+        return {
+            "error": _redact(f"WorldTides returned no extremes: {api_error}", key),
+            "note": WORLDTIDES_MANUAL_NOTE,
+        }
+    return parse_worldtides_extremes(payload)
+
+
+def fetch_tides(lat: float, lon: float, days: int) -> dict[str, Any]:
+    """Tide source ladder: NOAA CO-OPS where it has a nearby station, then
+    WorldTides when WORLDTIDES_KEY is set, else the manual-fallback note.
+    """
+    noaa = fetch_tides_noaa(lat, lon, days)
+    if "error" not in noaa:
+        return noaa
+
+    key = os.environ.get("WORLDTIDES_KEY")
+    if not key:
+        return noaa
+
+    worldtides = fetch_tides_worldtides(lat, lon, days, key)
+    if "error" not in worldtides:
+        return worldtides
+    return {
+        "error": f"NOAA CO-OPS: {noaa['error']}; {worldtides['error']}",
+        "note": worldtides.get("note", WORLDTIDES_MANUAL_NOTE),
     }
 
 
