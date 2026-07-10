@@ -71,7 +71,9 @@ Observed at **[{buoy.station.name}]({buoy.station.url})** ({buoy.station.distanc
 {Instruction: cross-check this observation against today's model forecast in the Swell Forecast table. If the buoy shows meaningfully more or less than the model (e.g. 1.5 m @ 18 s observed vs 0.6 m @ 9 s modeled), trust the buoy for right-now conditions and FLAG the disagreement explicitly here in one line.}
 
 {If buoy unavailable:}
-No NDBC buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and check [ndbc.noaa.gov](https://www.ndbc.noaa.gov) for station status before you go.
+No buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and check the buoy network for the region ([ndbc.noaa.gov](https://www.ndbc.noaa.gov) in the US, [portus.puertos.es](https://portus.puertos.es/) in Spain) before you go.
+
+{If the buoy observation has null direction/wind/temp (coastal stations report height/period only): show only the populated rows, do not write "N/A" rows.}
 
 ### Swell Forecast
 
@@ -230,7 +232,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 {List every source consulted with its URL.}
 
 - Open-Meteo Marine (swell/wind/water temp forecast)
-- {NOAA NDBC buoy {id} if available}
+- {buoy network + station {id} if available, e.g. "NOAA NDBC buoy 46026" or "Puertos del Estado buoy 1103"}
 - {NOAA CO-OPS tides station {id} if available}
 - {Surfline / Wannasurf / surf-forecast.com / Wikipedia / Reddit / webcams as consulted, each with URL}
 

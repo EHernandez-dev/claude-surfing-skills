@@ -50,7 +50,7 @@ Optional flags: `--units metric|imperial` (default metric: heights m, wind km/h,
 **If the script fails:** note the failure and provide manual check links:
 
 - Waves: `https://www.windy.com/-Waves-waves`
-- Buoys: `https://www.ndbc.noaa.gov`
+- Buoys: `https://www.ndbc.noaa.gov` (US) or `https://portus.puertos.es` (Spain)
 - Tides: `https://www.tide-forecast.com`
 
 ## Phase 4: Present Results

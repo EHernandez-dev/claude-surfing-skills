@@ -13,7 +13,9 @@ Data sources:
 - Open-Meteo Marine API: wave/swell height, period, direction, sea surface temp
 - Open-Meteo Forecast API: wind, air temp, precipitation, UV index
 - NOAA CO-OPS: tide predictions (US stations only)
-- NOAA NDBC: nearest buoy observations (real observed waves + water temp)
+- Buoy observations from a region-keyed network registry (real observed waves
+  + water temp): NOAA NDBC everywhere it reaches, Puertos del Estado (PORTUS)
+  for Spanish coasts (ADR 0002)
 - astral: sunrise/sunset/twilight
 """
 
@@ -36,11 +38,21 @@ NOAA_PREDICTIONS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagette
 NDBC_STATIONS_URL = "https://www.ndbc.noaa.gov/activestations.xml"
 NDBC_REALTIME_URL = "https://www.ndbc.noaa.gov/data/realtime2/{station_id}.txt"
 
+# Puertos del Estado PORTUS API (keyless, undocumented; ADR 0002). Polite
+# polling: one observation request per spot per run, browser-like User-Agent.
+PORTUS_STATIONS_URL = "https://portus.puertos.es/portussvr/api/estaciones/hist/WAVE"
+PORTUS_LASTDATA_URL = "https://portus.puertos.es/portussvr/api/lastData/station/{station_id}"
+PORTUS_PORTAL_URL = "https://portus.puertos.es/"
+PORTUS_CATEGORIES = ["WAVE", "WIND", "WATER_TEMP", "AIR_TEMP", "SEA_LEVEL", "CURRENTS", "SALINITY"]
+PORTUS_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+}
+
 # Max distance to accept a NOAA tide station; beyond this the spot is
 # probably outside the US and we report a gap instead of a wrong tide.
 MAX_TIDE_STATION_KM = 80.0
 
-# Max distance to accept an NDBC buoy for observed-conditions cross-check.
+# Max distance to accept a buoy (any network) for observed-conditions cross-check.
 MAX_BUOY_KM = 150.0
 
 FT_PER_M = 3.28084
@@ -477,7 +489,135 @@ def parse_ndbc_realtime(text: str) -> dict[str, Any] | None:
     return None
 
 
-def fetch_buoy(lat: float, lon: float) -> dict[str, Any]:
+def parse_portus_lastdata(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Parse a PORTUS lastData response into an SI observation.
+
+    Each entry in `datos` has `nombreColumna` (sometimes null), a string
+    `valor`, and a `factor` to divide by (e.g. tp valor "859", factor 100
+    -> 8.59 s). Coastal buoys report fewer sensors than deep-water ones, so
+    any column except significant wave height (hm0) may be absent.
+    Returns None when there is no wave observation.
+    """
+    if not payload:
+        return None
+
+    values: dict[str, float] = {}
+    for entry in payload.get("datos", []):
+        column = entry.get("nombreColumna")
+        if not column:
+            continue
+        try:
+            factor = float(entry.get("factor") or 1.0)
+            values[column] = float(entry["valor"]) / (factor or 1.0)
+        except (TypeError, ValueError, KeyError):
+            continue
+
+    if "hm0" not in values:
+        return None
+
+    # fecha is UTC, e.g. "2026-07-10 16:00:00.0"
+    observed_at = None
+    fecha = payload.get("fecha")
+    if fecha:
+        observed_at = f"{fecha[:16]} UTC"
+
+    return {
+        "observed_at": observed_at,
+        "wave_height_m": values["hm0"],
+        "dominant_period_s": values.get("tp"),
+        "mean_wave_direction": compass(values.get("dmd")),
+        "wind_ms": values.get("vv_md"),
+        "wind_direction": compass(values.get("dv_md")),
+        "water_temp_c": values.get("ts2"),
+    }
+
+
+def nearest_portus_station(
+    stations: list[dict[str, Any]], lat: float, lon: float
+) -> tuple[dict[str, Any], float] | None:
+    """Nearest available PORTUS wave station within MAX_BUOY_KM, or None.
+
+    Selection is by distance and `disponible` only: other metadata (incidencia,
+    maxFechaAna) proved unreliable in live probes - beached-flagged stations
+    still report. Staleness surfaces at parse time instead.
+    """
+    candidates = []
+    for station in stations:
+        if not station.get("disponible"):
+            continue
+        st_lat, st_lon = station.get("latitud"), station.get("longitud")
+        if st_lat is None or st_lon is None:
+            continue
+        distance = haversine_km(lat, lon, st_lat, st_lon)
+        if distance <= MAX_BUOY_KM:
+            candidates.append((distance, station))
+    if not candidates:
+        return None
+    distance, station = min(candidates, key=lambda c: c[0])
+    return station, distance
+
+
+PORTUS_MANUAL_NOTE = "Check https://portus.puertos.es manually."
+
+
+def fetch_buoy_portus(lat: float, lon: float) -> dict[str, Any]:
+    """Latest observation from the nearest Puertos del Estado wave buoy.
+
+    Polite polling per ADR 0002: one station-list GET plus exactly one
+    lastData request per run - if the nearest station has no usable data,
+    degrade rather than try the next one.
+    """
+    with httpx.Client(timeout=30.0, headers=PORTUS_HEADERS) as client:
+        try:
+            response = client.get(PORTUS_STATIONS_URL, params={"locale": "es"})
+            response.raise_for_status()
+            stations = response.json()
+        except Exception as e:
+            return {
+                "error": f"Puertos del Estado station lookup failed: {e}",
+                "note": PORTUS_MANUAL_NOTE,
+            }
+
+        nearest = nearest_portus_station(stations, lat, lon)
+        if nearest is None:
+            return {
+                "error": f"No Puertos del Estado wave buoy within {int(MAX_BUOY_KM)} km",
+                "note": f"No nearby observed-wave data from this network. {PORTUS_MANUAL_NOTE}",
+            }
+        station, distance = nearest
+
+        try:
+            response = client.post(
+                PORTUS_LASTDATA_URL.format(station_id=station["id"]),
+                params={"locale": "es"},
+                json=PORTUS_CATEGORIES,
+            )
+            response.raise_for_status()
+            observation = parse_portus_lastdata(response.json())
+        except Exception as e:
+            return {
+                "error": f"Puertos del Estado observation failed for station {station['id']}: {e}",
+                "note": PORTUS_MANUAL_NOTE,
+            }
+
+    if observation is None:
+        return {
+            "error": f"Puertos del Estado station {station['id']} ({station.get('nombre', '')}) has no current wave data",
+            "note": PORTUS_MANUAL_NOTE,
+        }
+
+    return {
+        "station": {
+            "id": str(station["id"]),
+            "name": station.get("nombre", ""),
+            "distance_km": round(distance, 1),
+            "url": PORTUS_PORTAL_URL,
+        },
+        **observation,
+    }
+
+
+def fetch_buoy_ndbc(lat: float, lon: float) -> dict[str, Any]:
     """Find the nearest NDBC buoys and return the latest real observation.
 
     Observed data is the ground truth the model forecast gets cross-checked
@@ -534,8 +674,65 @@ def fetch_buoy(lat: float, lon: float) -> dict[str, Any]:
                 }
 
     return {
-        "error": "No nearby buoy is currently reporting wave data",
+        "error": "No nearby NDBC buoy is currently reporting wave data",
         "note": "Rely on model forecast; check https://www.ndbc.noaa.gov for station status.",
+    }
+
+
+def _covers_spain(lat: float, lon: float) -> bool:
+    """Spanish coasts served by Puertos del Estado buoys.
+
+    Boxes hug the Spanish coastline so runs in Portugal or France do not
+    poll the rate-limited PORTUS API for stations that cannot be within
+    range (ADR 0002 politeness). Border fringes (northern Portugal, the
+    French Basque corner) stay inside deliberately: Spanish buoys sit
+    within MAX_BUOY_KM of those breaks.
+    """
+    north_coast = 41.5 <= lat <= 44.2 and -9.6 <= lon <= -1.6
+    med_and_south = 35.9 <= lat <= 42.7 and -7.6 <= lon <= 4.5
+    canarias = 27.0 <= lat <= 29.8 and -18.5 <= lon <= -13.0
+    return north_coast or med_and_south or canarias
+
+
+# Region-keyed buoy source registry. Networks are tried in order for any
+# region covering the spot; the first one that returns an observation wins.
+# Every fetcher returns the same SI observation shape, so a later network
+# slots in with one entry and no contract change. `fetch` wraps the function
+# in a lambda so the module-level name is resolved at call time (tests
+# monkeypatch the fetchers).
+BUOY_NETWORKS: list[dict[str, Any]] = [
+    {
+        "name": "Puertos del Estado",
+        "covers": _covers_spain,
+        "fetch": lambda lat, lon: fetch_buoy_portus(lat, lon),
+        "manual_url": "https://portus.puertos.es",
+    },
+    {
+        "name": "NOAA NDBC",
+        "covers": lambda lat, lon: True,
+        "fetch": lambda lat, lon: fetch_buoy_ndbc(lat, lon),
+        "manual_url": "https://www.ndbc.noaa.gov",
+    },
+]
+
+
+def fetch_buoy(lat: float, lon: float) -> dict[str, Any]:
+    """Latest buoy observation from the first covering network in the registry."""
+    errors = []
+    urls = []
+    for network in BUOY_NETWORKS:
+        if not network["covers"](lat, lon):
+            continue
+        result = network["fetch"](lat, lon)
+        if "error" not in result:
+            return result
+        errors.append(f"{network['name']}: {result['error']}")
+        urls.append(network["manual_url"])
+    return {
+        "error": "; ".join(errors) or "No buoy network covers this location",
+        "note": "No nearby observed-wave data. Rely on the model forecast; check "
+        + " or ".join(urls or ["https://www.ndbc.noaa.gov"])
+        + " manually.",
     }
 
 

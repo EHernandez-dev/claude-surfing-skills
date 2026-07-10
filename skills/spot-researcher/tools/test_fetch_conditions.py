@@ -21,8 +21,10 @@ from fetch_conditions import (
     compass,
     haversine_km,
     m_to_ft,
+    nearest_portus_station,
     parse_coordinates,
     parse_ndbc_realtime,
+    parse_portus_lastdata,
     rate_block,
     report_filename,
     slugify,
@@ -282,6 +284,169 @@ class TestParseNdbcRealtime:
         header = self.SAMPLE.splitlines()[:2]
         row = "2026 07 08 14 40 280  6.0  7.0    MM    MM    MM  MM 1015.2  15.0    MM  12.0 99.0 +0.2    MM"
         assert parse_ndbc_realtime("\n".join([*header, row])) is None
+
+
+class TestParsePortusLastdata:
+    """Fixture captured from a live probe of station 2136 (Bilbao-Vizcaya), 2026-07-10."""
+
+    LASTDATA = {
+        "fecha": "2026-07-10 16:00:00.0",
+        "datos": [
+            {"nombreParametro": "Periodo de Pico", "nombreColumna": "tp", "valor": "820", "factor": 100.0, "unidad": "s"},
+            {"nombreParametro": "Periodo Medio Tm02", "nombreColumna": "tm02", "valor": "438", "factor": 100.0, "unidad": "s"},
+            {"nombreParametro": "Altura Máxima del Oleaje", "nombreColumna": "hmax", "valor": "100", "factor": 100.0, "unidad": "m"},
+            {"nombreParametro": "Altura Signif. del Oleaje", "nombreColumna": "hm0", "valor": "70", "factor": 100.0, "unidad": "m"},
+            {"nombreParametro": "Direcc. Media de Proced.", "nombreColumna": "dmd", "valor": "323", "factor": 1.0, "unidad": "º"},
+            {"nombreParametro": "Velocidad del viento", "nombreColumna": "vv_md", "valor": "164", "factor": 100.0, "unidad": "m/s"},
+            {"nombreParametro": "Direc. de proced. del Viento", "nombreColumna": "dv_md", "valor": "335", "factor": 1.0, "unidad": "º"},
+            {"nombreParametro": "Temperatura del Agua", "nombreColumna": "ts2", "valor": "2469", "factor": 100.0, "unidad": "ºC"},
+            {"nombreParametro": "Latitud", "nombreColumna": "lat", "valor": "43.629395", "factor": 1.0, "unidad": "º"},
+        ],
+    }
+
+    def test_parses_si_observation_with_factor_scaling(self):
+        obs = parse_portus_lastdata(self.LASTDATA)
+        assert obs["wave_height_m"] == 0.7  # hm0 70 / factor 100
+        assert obs["dominant_period_s"] == 8.2  # tp 820 / factor 100
+        assert obs["mean_wave_direction"] == "NW"  # dmd 323 deg
+        assert obs["wind_ms"] == 1.64
+        assert obs["wind_direction"] == "NNW"  # dv_md 335 deg
+        assert obs["water_temp_c"] == 24.69
+        assert obs["observed_at"] == "2026-07-10 16:00 UTC"
+
+    def test_factor_scaling_example_from_research(self):
+        # Documented example: Tp valor "859", factor 100 -> 8.59 s
+        payload = {
+            "fecha": "2026-07-10 14:00:00.0",
+            "datos": [
+                {"nombreColumna": "hm0", "valor": "120", "factor": 100.0},
+                {"nombreColumna": "tp", "valor": "859", "factor": 100.0},
+            ],
+        }
+        obs = parse_portus_lastdata(payload)
+        assert obs["dominant_period_s"] == 8.59
+        assert obs["wave_height_m"] == 1.2
+
+    def test_coastal_buoy_without_direction_wind_or_temp(self):
+        # Real case (station 1103): only wave height/period sensors report
+        payload = {
+            "fecha": "2026-07-10 15:00:00.0",
+            "datos": [
+                {"nombreColumna": "hm0", "valor": "60", "factor": 100.0},
+                {"nombreColumna": "tp", "valor": "630", "factor": 100.0},
+                {"nombreColumna": None, "valor": "1", "factor": 1.0},  # observed in the wild
+            ],
+        }
+        obs = parse_portus_lastdata(payload)
+        assert obs["wave_height_m"] == 0.6
+        assert obs["dominant_period_s"] == 6.3
+        assert obs["mean_wave_direction"] is None
+        assert obs["wind_ms"] is None
+        assert obs["water_temp_c"] is None
+
+    def test_no_wave_height_returns_none(self):
+        payload = {"fecha": "2026-07-10 16:00:00.0", "datos": [{"nombreColumna": "tp", "valor": "820", "factor": 100.0}]}
+        assert parse_portus_lastdata(payload) is None
+
+    def test_empty_response_returns_none(self):
+        assert parse_portus_lastdata({}) is None
+        assert parse_portus_lastdata(None) is None
+
+
+class TestNearestPortusStation:
+    STATIONS = [
+        {"id": 1103, "nombre": "Boya Costera de Bilbao II", "latitud": 43.397, "longitud": -3.13, "disponible": True},
+        {"id": 2136, "nombre": "Boya de Bilbao-Vizcaya", "latitud": 43.63, "longitud": -3.03, "disponible": True},
+        {"id": 9999, "nombre": "Retired", "latitud": 43.40, "longitud": -3.01, "disponible": False},
+        {"id": 1234, "nombre": "Canarias", "latitud": 28.05, "longitud": -15.39, "disponible": True},
+    ]
+
+    def test_picks_nearest_available(self):
+        # Sopelana: the retired buoy is nearest but unavailable; Bilbao II wins
+        station, distance = nearest_portus_station(self.STATIONS, 43.38, -3.01)
+        assert station["id"] == 1103
+        assert 0 < distance < 15
+
+    def test_skips_stations_beyond_max_distance(self):
+        # Madrid is far from every wave buoy
+        assert nearest_portus_station(self.STATIONS, 40.42, -3.70) is None
+
+    def test_no_stations(self):
+        assert nearest_portus_station([], 43.38, -3.01) is None
+
+
+class TestCoversSpain:
+    """The PORTUS region must hug the Spanish coast: polling the rate-limited
+    API for spots no Spanish buoy can reach wastes its per-run request."""
+
+    def test_spanish_coasts_covered(self):
+        covered = [
+            (43.407, -2.699),  # Mundaka, Basque coast
+            (42.2, -8.9),      # Galicia (Vigo)
+            (36.5, -6.3),      # Cadiz
+            (39.5, 2.6),       # Mallorca
+            (41.4, 2.2),       # Barcelona
+            (28.1, -15.4),     # Canarias (Las Palmas)
+        ]
+        for lat, lon in covered:
+            assert fetch_conditions._covers_spain(lat, lon), (lat, lon)
+
+    def test_far_iberian_and_french_spots_excluded(self):
+        excluded = [
+            (39.6, -9.07),     # Nazare, Portugal
+            (38.7, -9.42),     # Lisbon coast
+            (37.1, -8.0),      # Algarve
+            (43.66, -1.44),    # Hossegor, France
+            (37.759, -122.513),  # Ocean Beach, US
+        ]
+        for lat, lon in excluded:
+            assert not fetch_conditions._covers_spain(lat, lon), (lat, lon)
+
+
+class TestBuoyNetworkRegistry:
+    MUNDAKA = (43.407, -2.699)
+    OCEAN_BEACH = (37.759, -122.513)
+    OBSERVATION = {
+        "station": {"id": "2136", "name": "Boya de Bilbao-Vizcaya", "distance_km": 36.0, "url": "https://portus.puertos.es/"},
+        "observed_at": "2026-07-10 16:00 UTC",
+        "wave_height_m": 0.7,
+        "dominant_period_s": 8.2,
+        "mean_wave_direction": "NW",
+        "wind_ms": 1.64,
+        "wind_direction": "NNW",
+        "water_temp_c": 24.69,
+    }
+
+    def test_spain_uses_portus_and_skips_ndbc(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_portus", lambda lat, lon: self.OBSERVATION)
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_buoy_ndbc", lambda lat, lon: calls.append("ndbc") or {"error": "x", "note": "y"}
+        )
+        result = fetch_conditions.fetch_buoy(*self.MUNDAKA)
+        assert result == self.OBSERVATION
+        assert calls == [], "NDBC must not be polled when Puertos del Estado delivers"
+
+    def test_spain_falls_back_to_ndbc_when_portus_fails(self, monkeypatch):
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_portus", lambda lat, lon: {"error": "portus down", "note": "n"})
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_ndbc", lambda lat, lon: self.OBSERVATION)
+        assert fetch_conditions.fetch_buoy(*self.MUNDAKA) == self.OBSERVATION
+
+    def test_us_never_polls_portus(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            fetch_conditions, "fetch_buoy_portus", lambda lat, lon: calls.append("portus") or self.OBSERVATION
+        )
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_ndbc", lambda lat, lon: self.OBSERVATION)
+        fetch_conditions.fetch_buoy(*self.OCEAN_BEACH)
+        assert calls == []
+
+    def test_all_networks_failing_aggregates_errors(self, monkeypatch):
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_portus", lambda lat, lon: {"error": "portus down", "note": "n1"})
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_ndbc", lambda lat, lon: {"error": "ndbc down", "note": "n2"})
+        result = fetch_conditions.fetch_buoy(*self.MUNDAKA)
+        assert "portus down" in result["error"] and "ndbc down" in result["error"]
+        assert result["note"], "degradation contract requires a manual-fallback note"
 
 
 class TestSlugify:
@@ -563,3 +728,12 @@ class TestIntegration:
         assert data["units"]["system"] == "metric"
         assert "error" in data["tides"]
         assert any("tides" in g for g in data["gaps"])
+
+    def test_basque_coast_gets_portus_buoy_observation(self):
+        """Mundaka, Spain - observed wave data must come from Puertos del Estado."""
+        result = fetch_conditions.fetch_buoy(43.407, -2.699)
+        assert "error" not in result, result
+        assert result["wave_height_m"] is not None
+        assert result["dominant_period_s"] is not None
+        assert result["station"]["distance_km"] < fetch_conditions.MAX_BUOY_KM
+        assert "portus.puertos.es" in result["station"]["url"]

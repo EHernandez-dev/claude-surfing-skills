@@ -1,13 +1,13 @@
 ---
 name: spot-researcher
-description: Research surf spots worldwide and generate comprehensive surf spot reports, aggregating swell/wind/tide forecasts, live buoy observations, spot guides, session reports, hazards (rip currents, reef, localism), wetsuit recommendations, and access info from Surfline, Wannasurf, surf-forecast.com, NOAA, and Open-Meteo. Use when planning a surf trip or session, or when asked for a surf forecast, spot guide, surf conditions, or wave report.
+description: Research surf spots worldwide and generate comprehensive surf spot reports, aggregating swell/wind/tide forecasts, live buoy observations, spot guides, session reports, hazards (rip currents, reef, localism), wetsuit recommendations, and access info from Surfline, Wannasurf, surf-forecast.com, NOAA, Puertos del Estado, and Open-Meteo. Use when planning a surf trip or session, or when asked for a surf forecast, spot guide, surf conditions, or wave report.
 ---
 
 # Spot Researcher
 
 Research surf spots worldwide and generate comprehensive spot reports combining data from multiple sources including Surfline, Wannasurf, surf-forecast.com, Open-Meteo marine forecasts, NOAA buoys and tide stations, and community session reports.
 
-**Data Sources:** This skill aggregates information from specialized surf websites (Surfline, Wannasurf, surf-forecast.com, SurferToday) plus free marine data APIs (Open-Meteo Marine, NOAA NDBC buoys, NOAA CO-OPS tides). Report quality depends on how well-documented the spot is. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern. Tide predictions are automatic for US spots only (NOAA); non-US spots get a documented gap with manual lookup links.
+**Data Sources:** This skill aggregates information from specialized surf websites (Surfline, Wannasurf, surf-forecast.com, SurferToday) plus free marine data APIs (Open-Meteo Marine, buoy observations from a regional network registry - NOAA NDBC in the US, Puertos del Estado in Spain - and NOAA CO-OPS tides). Report quality depends on how well-documented the spot is. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern. Tide predictions are automatic for US spots only (NOAA); non-US spots get a documented gap with manual lookup links.
 
 ## When to Use This Skill
 
@@ -109,7 +109,7 @@ This returns JSON with:
 - **units**: the units in effect - `system` ("metric"/"imperial") plus display labels `wave_height`, `tide_height`, `wind_speed`, `temperature`
 - **report**: report naming inputs - `directory` ("reports"), `target_date` (the target day, falling back to the forecast window's first day - never the run date; null when neither is known), `spot_slug`, and `filenames` (the exact report path per verdict slug, e.g. `{"go": "reports/2026-07-11-mundaka-go.md", "check": ..., "skip": ...}`)
 - **marine**: per-day forecast. Each day has `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local): `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type` (offshore/onshore/cross-shore/light; requires `--facing`), and `quality` (`score` 0-10 + `rating` flat/poor/fair/good/epic; requires `--facing`)
-- **buoy**: nearest NDBC buoy real observation - `station` (id, name, distance_km, url), `observed_at` (UTC), `wave_height`, `dominant_period_s`, `mean_wave_direction`, `wind_speed`, `wind_direction`, `water_temp`. This is **observed ground truth** - cross-check the model forecast against it and flag disagreement
+- **buoy**: nearest buoy real observation from the regional network registry (NOAA NDBC in the US, Puertos del Estado on Spanish coasts) - `station` (id, name, distance_km, url), `observed_at` (UTC), `wave_height`, `dominant_period_s`, `mean_wave_direction`, `wind_speed`, `wind_direction`, `water_temp`. Coastal stations may report wave height/period only (null direction/wind/temp). This is **observed ground truth** - cross-check the model forecast against it and flag disagreement
 - **tides**: NOAA CO-OPS predictions - `station` (id, name, distance_km, url), `datum` (MLLW), `days[]` with high/low `events[]` (`time`, `height`, `type`). **US only** - non-US spots return an `error` + note (tide-forecast.com / WorldTides fallback)
 - **sea_temperature**: `current`, `source` ("buoy observation" preferred over "model SST" when both exist), `model`, `buoy`, and a deterministic `wetsuit` recommendation
 - **daylight**: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours` (dawn patrol planning)
@@ -551,7 +551,7 @@ OB changes block by block. If in doubt, don't paddle out.
 ### Script Failures
 
 - **Don't block:** If the Python script fails, note in "Information Gaps" and continue
-- **Provide alternatives:** Include manual check links (Windy waves layer, Surfline, tide-forecast.com, ndbc.noaa.gov)
+- **Provide alternatives:** Include manual check links (Windy waves layer, Surfline, tide-forecast.com, ndbc.noaa.gov, portus.puertos.es for Spain)
 - **One retry:** Retry once on network timeouts, then continue
 
 ### Missing Data
@@ -626,6 +626,7 @@ uv run python fetch_conditions.py \
 - Google Maps: `https://www.google.com/maps/search/?api=1&query={lat},{lon}` (coordinates) or `?api=1&query={URL-encoded place name}` (named places)
 - Windy waves layer: `https://www.windy.com/-Waves-waves?waves,{lat},{lon},10`
 - NDBC buoy: `https://www.ndbc.noaa.gov/station_page.php?station={id}`
+- Puertos del Estado buoys (Spain): `https://portus.puertos.es/` (portal map; no per-station deep link)
 - NOAA tides: `https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={id}`
 - tide-forecast.com (non-US fallback): `https://www.tide-forecast.com/locations/{slug}/tides/latest`
 
