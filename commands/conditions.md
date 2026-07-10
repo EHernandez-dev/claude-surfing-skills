@@ -45,7 +45,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python fetch_con
   --days 7
 ```
 
-Optional flags: `--tide-station {noaa_id}` overrides the nearest-station lookup when the spot has a known better station; `--days` accepts 1-7 (default 7, use a smaller number for a shorter look-ahead).
+Optional flags: `--units metric|imperial` (default metric: heights m, wind km/h, temps °C; pass `imperial` if the user asked for it); `--tide-station {noaa_id}` overrides the nearest-station lookup when the spot has a known better station; `--days` accepts 1-7 (default 7, use a smaller number for a shorter look-ahead).
 
 **If the script fails:** note the failure and provide manual check links:
 
@@ -59,7 +59,7 @@ Keep the output concise and scannable, using tables. Include:
 
 1. **Spot summary:** name, coordinates, facing direction (or note it was skipped)
 2. **Current buoy observation:** station name/distance, observed wave height, period, direction, water temp; flag disagreement if it conflicts with the model forecast for today
-3. **Swell forecast table:** one row per day - date, max wave/swell height (ft), max period (s), dominant swell direction
+3. **Swell forecast table:** one row per day - date, max wave/swell height, max period (s), dominant swell direction; label quantities with the payload's `units` object
 4. **Wind:** on/off/cross-shore classification per day (only if `--facing` was provided), speed, gusts
 5. **Tide table:** high/low events per day, or - if `tides.error` is present - a non-US gap note with a link to `https://www.tide-forecast.com`
 6. **Water temp + wetsuit line:** from `sea_temperature`

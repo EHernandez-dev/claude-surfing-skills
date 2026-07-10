@@ -1,4 +1,6 @@
-# {Spot Name} - Surf Spot Report ({YYYY-MM-DD})
+# {Spot Name} - Surf Spot Report ({target date YYYY-MM-DD})
+
+{Format note: every quantity below uses the unit labels from the conditions payload's `units` object (`units.wave_height`, `units.tide_height`, `units.wind_speed`, `units.temperature`). JSON keys are unit-neutral; never mix unit systems within one report. The date in the title and filename is the target day (the day the reader intends to surf), never the run date.}
 
 > **⚠️ AI-Generated Research Document**
 >
@@ -42,7 +44,7 @@
 
 | Day / Date | Verdict | Best window | Swell | Wind | Tide notes | Reasoning |
 |------------|---------|-------------|-------|------|------------|-----------|
-| {Day} {Mon} {DD} | {🟢 Go / 🟡 Worth a check / 🔴 Skip} | {HH:MM-HH:MM local} | {ht @ period from dir} | {kn + dir, offshore/onshore/cross} | {tide state during window} | {one line tying swell + wind + tide to the works-on profile} |
+| {Day} {Mon} {DD} | {🟢 Go / 🟡 Worth a check / 🔴 Skip} | {HH:MM-HH:MM local} | {ht @ period from dir} | {speed {units.wind_speed} + dir, offshore/onshore/cross} | {tide state during window} | {one line tying swell + wind + tide to the works-on profile} |
 
 {Format notes:
 
@@ -61,12 +63,12 @@ Observed at **[{buoy.station.name}]({buoy.station.url})** ({buoy.station.distanc
 
 | Metric | Observed |
 |--------|----------|
-| Wave height | {buoy.wave_height_ft} ft |
+| Wave height | {buoy.wave_height} {units.wave_height} |
 | Dominant period | {buoy.dominant_period_s} s |
 | Direction | {buoy.mean_wave_direction} |
-| Water temp | {buoy.water_temp_f}°F |
+| Water temp | {buoy.water_temp}{units.temperature} |
 
-{Instruction: cross-check this observation against today's model forecast in the Swell Forecast table. If the buoy shows meaningfully more or less than the model (e.g. 5 ft @ 18 s observed vs 2 ft @ 9 s modeled), trust the buoy for right-now conditions and FLAG the disagreement explicitly here in one line.}
+{Instruction: cross-check this observation against today's model forecast in the Swell Forecast table. If the buoy shows meaningfully more or less than the model (e.g. 1.5 m @ 18 s observed vs 0.6 m @ 9 s modeled), trust the buoy for right-now conditions and FLAG the disagreement explicitly here in one line.}
 
 {If buoy unavailable:}
 No NDBC buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and check [ndbc.noaa.gov](https://www.ndbc.noaa.gov) for station status before you go.
@@ -77,7 +79,7 @@ No NDBC buoy is reporting nearby ({buoy.error}). Rely on the model forecast belo
 
 | Date | Swell | Wind waves | Max wave height |
 |------|-------|------------|-----------------|
-| {Day} {Mon} {DD} | {swell_height_max_ft} ft @ {swell_period_max_s}s from {swell_direction_dominant} | {wind_wave note from blocks} | {wave_height_max_ft} ft |
+| {Day} {Mon} {DD} | {swell_height_max} {units.wave_height} @ {swell_period_max_s}s from {swell_direction_dominant} | {wind_wave note from blocks} | {wave_height_max} {units.wave_height} |
 
 ### Wind
 
@@ -85,18 +87,18 @@ No NDBC buoy is reporting nearby ({buoy.error}). Rely on the model forecast belo
 
 | Date | Best wind (window) | Worst wind (window) |
 |------|--------------------|--------------------|
-| {Day} {Mon} {DD} | {kn + dir, type} at {HH:MM} | {kn + dir, type} at {HH:MM} |
+| {Day} {Mon} {DD} | {speed {units.wind_speed} + dir, type} at {HH:MM} | {speed {units.wind_speed} + dir, type} at {HH:MM} |
 
 {If facing was not provided, wind_type is null: state that wind could not be classified offshore/onshore and give raw direction + speed only.}
 
 ### Tides
 
 {If NOAA tide data available:}
-Predictions from **[{tides.station.name}]({tides.station.url})** ({tides.station.distance_km} km away). Heights are feet relative to **{tides.datum}** (mean lower low water).
+Predictions from **[{tides.station.name}]({tides.station.url})** ({tides.station.distance_km} km away). Heights are {units.tide_height} relative to **{tides.datum}** (mean lower low water).
 
 | Date | Highs | Lows |
 |------|-------|------|
-| {Day} {Mon} {DD} | {HH:MM ({height_ft} ft), ...} | {HH:MM ({height_ft} ft), ...} |
+| {Day} {Mon} {DD} | {HH:MM ({height} {units.tide_height}), ...} | {HH:MM ({height} {units.tide_height}), ...} |
 
 {Instruction: overlay these tides on the session windows in This Week's Outlook. If the spot needs a specific tide (e.g. mid-incoming), the recommended window must land on it.}
 
@@ -106,10 +108,10 @@ Predictions from **[{tides.station.name}]({tides.station.url})** ({tides.station
 ### Water Temp & Wetsuit
 
 {If sea_temperature available:}
-Water is **{sea_temperature.current_f}°F ({sea_temperature.current_c}°C)** ({sea_temperature.source}). Recommended: **{sea_temperature.wetsuit}**.
+Water is **{sea_temperature.current}{units.temperature}** ({sea_temperature.source}). Recommended: **{sea_temperature.wetsuit}**.
 
-{If sea_temperature.buoy_f and sea_temperature.model_f both present and differ by 2°F or more:}
-*Buoy reads {buoy_f}°F vs model {model_f}°F; the wetsuit call uses the buoy observation.*
+{If sea_temperature.buoy and sea_temperature.model both present and differ by 1°C / 2°F or more:}
+*Buoy reads {buoy}{units.temperature} vs model {model}{units.temperature}; the wetsuit call uses the buoy observation.*
 
 {If unavailable:}
 Water temperature not available ({sea_temperature.error}). Check Surfline or surf-forecast.com and pick a wetsuit accordingly.
@@ -130,7 +132,7 @@ Water temperature not available ({sea_temperature.error}). Check Surfline or sur
 
 | Date | Conditions | Air (H/L) | Precip | UV max |
 |------|-----------|-----------|--------|--------|
-| {Day} {Mon} {DD} | {icon} {conditions} | {temp_max_f}° / {temp_min_f}°F | {precip_probability_pct}% | {uv_index_max} |
+| {Day} {Mon} {DD} | {icon} {conditions} | {temp_max} / {temp_min}{units.temperature} | {precip_probability_pct}% | {uv_index_max} |
 
 {If uv_index_max >= 8 on any day:}
 ☀️ **Sun warning:** UV reaches **{value}** on {dates}. Sitting in the lineup is prolonged, reflected sun exposure. Use reef-safe SPF 50+, zinc, and consider a UV-rated top.
@@ -150,7 +152,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 ## The Wave
 
-{How the wave actually breaks, synthesized from spot guides. Cover: takeoff zone and peak behavior, how it sections and where the makeable part is, how the character changes with size and tide (e.g. "fun and rippable at 2-4 ft mid tide; walls up and closes out over 6 ft; the inside dries out below +2 ft"). Whenever a detail comes from a specific guide or report, hyperlink the attribution as a Markdown link (e.g. "[Wannasurf]({url}) describes..."), never plain text. Note conflicts between sources explicitly rather than silently picking one.}
+{How the wave actually breaks, synthesized from spot guides. Cover: takeoff zone and peak behavior, how it sections and where the makeable part is, how the character changes with size and tide (e.g. "fun and rippable at 0.6-1.2 m mid tide; walls up and closes out over 2 m; the inside dries out below +0.6 m", in the report's units). Whenever a detail comes from a specific guide or report, hyperlink the attribution as a Markdown link (e.g. "[Wannasurf]({url}) describes..."), never plain text. Note conflicts between sources explicitly rather than silently picking one.}
 
 ## Hazards
 
@@ -158,7 +160,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 **Rip currents:** {Location relative to the break (channel positions, next to groins/piers/rocks), how locals use them to paddle out, and escape guidance (paddle parallel to shore, do not fight it). If no source mentions rips: omit here, note in gaps if expected for the break type.}
 
-**Rocks / reef:** {Exposure by tide level (e.g. "inside reef dries below +2 ft; do not surf the inside on a dropping low tide"), entry/exit hazards, timing. Omit if genuinely a clean sand-bottom beach break.}
+**Rocks / reef:** {Exposure by tide level (e.g. "inside reef dries below +0.6 m; do not surf the inside on a dropping low tide", in the report's units), entry/exit hazards, timing. Omit if genuinely a clean sand-bottom beach break.}
 
 **Wave hazards:** {Hold-downs, shallow impact zone, closeouts, backwash, the size at which the wave's character turns dangerous. Omit if no data.}
 

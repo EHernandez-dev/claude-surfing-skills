@@ -89,19 +89,23 @@ uv run python fetch_conditions.py \
 - `--spot-name` (required): Surf spot name
 - `--facing` (optional): Direction the spot faces looking out to sea, degrees true (e.g. 270 = west-facing). Enables `wind_type` (offshore/onshore/cross-shore/light), per-block `quality` ratings, and `surf_windows`
 - `--days` (optional): Forecast days, 1-7 (default: 7)
+- `--units` (optional): `metric` (default: heights m, wind km/h, temps °C) or `imperial` (heights ft, wind kn, temps °F). Precedence: this flag, then the surfer profile (once it exists), then metric. All quantities are SI internally; conversion happens only at the output edge
+- `--target-day` (optional): The day (YYYY-MM-DD) the surfer intends to surf; keys `report.target_date`. Defaults to the forecast window's first day, never the run date
 - `--tide-station` (optional): NOAA CO-OPS station ID override, skips the nearest-station lookup
 
 **Output:**
 
-Returns unified JSON with these keys:
+Returns unified JSON with these keys. All keys are unit-neutral; the `units` object states the units in effect:
 
 - `spot`: echo of inputs plus `facing_compass` and `timezone`
-- `marine.days[]`: per-day forecast, each with `summary` (max wave/swell height ft, max period, dominant direction) and `blocks[]` (3-hourly, 05:00-21:00 local) containing `wave_height_ft`, `swell_height_ft`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height_ft`, `wind_kn`, `wind_gust_kn`, `wind_direction`, `wind_type`, and `quality` (`score` 0-10 + `rating`)
-- `buoy`: nearest NDBC buoy real observation, `station` (id, name, distance_km, url), `observed_at`, `wave_height_ft`, `dominant_period_s`, `mean_wave_direction`, `water_temp_f`. This is observed ground truth, cross-check the model forecast against it
-- `tides`: NOAA CO-OPS predictions, `station`, `datum` (MLLW), `days[]` with high/low `events[]`. **US only**, non-US spots return an `error` plus a fallback note
-- `sea_temperature`: `current_f`, `current_c`, `source` (prefers "buoy observation" over "model SST" when both exist), `model_f`, `buoy_f`, and a deterministic `wetsuit` recommendation
+- `units`: `system` ("metric"/"imperial") plus display labels `wave_height`, `tide_height`, `wind_speed`, `temperature`
+- `report`: report naming inputs, `directory` ("reports"), `target_date` (target day, falling back to the forecast window's first day, never the run date; null when neither is known), `spot_slug`, `filenames` (exact report path per verdict slug: `go`/`check`/`skip`, following `reports/{target-date}-{spot-slug}-{verdict}.md`)
+- `marine.days[]`: per-day forecast, each with `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local) containing `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type`, and `quality` (`score` 0-10 + `rating`)
+- `buoy`: nearest NDBC buoy real observation, `station` (id, name, distance_km, url), `observed_at`, `wave_height`, `dominant_period_s`, `mean_wave_direction`, `wind_speed`, `wind_direction`, `water_temp`. This is observed ground truth, cross-check the model forecast against it
+- `tides`: NOAA CO-OPS predictions, `station`, `datum` (MLLW), `days[]` with high/low `events[]` (`time`, `height`, `type`). **US only**, non-US spots return an `error` plus a fallback note
+- `sea_temperature`: `current`, `source` (prefers "buoy observation" over "model SST" when both exist), `model`, `buoy`, and a deterministic `wetsuit` recommendation
 - `daylight`: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours`
-- `weather`: per-day `conditions`, `icon`, `temp_max_f`/`temp_min_f`, `precip_probability_pct`, `uv_index_max`
+- `weather`: per-day `conditions`, `icon`, `temp_max`/`temp_min`, `precip_probability_pct`, `uv_index_max`
 - `surf_windows`: best-rated surfable-light block per day (`best_time` is clamped to first light so it never lands in the dark), only present when `--facing` was provided
 - `gaps`: any API failures or skipped computations
 
@@ -157,7 +161,7 @@ Python 3.11+ (specified in `.python-version`).
 
 **No report generated**
 
-Ensure you're in a directory where you have write permissions. Reports are created in your current working directory, not in the plugin installation directory.
+Ensure you're in a directory where you have write permissions. Reports are created in a `reports/` folder inside your current working directory (named `{target-date}-{spot-slug}-{go|check|skip}.md`), not in the plugin installation directory.
 
 ## Development
 

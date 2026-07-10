@@ -4,6 +4,11 @@
 Fetches all environmental/conditions data for a surf spot from various APIs.
 Returns unified JSON matching the data contract for the spot-researcher skill.
 
+All quantities are SI internally (meters, m/s, degrees C); conversion happens
+only at the output edge, controlled by --units (metric default, imperial
+optional). JSON keys are unit-neutral and the payload echoes the units in
+effect in a top-level `units` object.
+
 Data sources:
 - Open-Meteo Marine API: wave/swell height, period, direction, sea surface temp
 - Open-Meteo Forecast API: wind, air temp, precipitation, UV index
@@ -14,8 +19,10 @@ Data sources:
 
 import json
 import math
+import re
 import sys
-from datetime import datetime, timedelta
+import unicodedata
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -35,6 +42,22 @@ MAX_TIDE_STATION_KM = 80.0
 
 # Max distance to accept an NDBC buoy for observed-conditions cross-check.
 MAX_BUOY_KM = 150.0
+
+FT_PER_M = 3.28084
+KN_PER_MS = 1.94384
+KMH_PER_MS = 3.6
+
+# Wind below this is "light" regardless of direction (~6 kn, glassy-ish).
+LIGHT_WIND_MS = 3.1
+
+# Display labels echoed in the payload's `units` object.
+UNIT_LABELS = {
+    "metric": {"wave_height": "m", "tide_height": "m", "wind_speed": "km/h", "temperature": "°C"},
+    "imperial": {"wave_height": "ft", "tide_height": "ft", "wind_speed": "kn", "temperature": "°F"},
+}
+
+# Filename slugs for the per-day verdict (Go / Worth a check / Skip).
+VERDICT_SLUGS = ("go", "check", "skip")
 
 TIDE_FALLBACK_NOTE = (
     "NOAA CO-OPS covers US coasts only. For non-US spots check "
@@ -104,7 +127,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def m_to_ft(meters: float | None) -> float | None:
     if meters is None:
         return None
-    return round(meters * 3.28084, 1)
+    return round(meters * FT_PER_M, 1)
 
 
 def c_to_f(celsius: float | None) -> float | None:
@@ -113,17 +136,63 @@ def c_to_f(celsius: float | None) -> float | None:
     return round(celsius * 9 / 5 + 32, 1)
 
 
-def classify_wind(wind_from_deg: float | None, facing_deg: float, speed_kn: float | None) -> str | None:
+def height_out(meters: float | None, units: str) -> float | None:
+    """Wave/swell height at the output edge: m (metric) or ft (imperial)."""
+    if meters is None:
+        return None
+    return m_to_ft(meters) if units == "imperial" else round(meters, 1)
+
+
+def tide_height_out(meters: float | None, units: str) -> float | None:
+    """Tide height at the output edge: 2-decimal m (tide-table precision) or ft."""
+    if meters is None:
+        return None
+    return m_to_ft(meters) if units == "imperial" else round(meters, 2)
+
+
+def wind_out(ms: float | None, units: str) -> int | None:
+    """Wind speed at the output edge: km/h (metric) or kn (imperial)."""
+    if ms is None:
+        return None
+    return round(ms * (KN_PER_MS if units == "imperial" else KMH_PER_MS))
+
+
+def temp_out(celsius: float | None, units: str) -> float | None:
+    """Temperature at the output edge: deg C (metric) or deg F (imperial)."""
+    if celsius is None:
+        return None
+    return c_to_f(celsius) if units == "imperial" else round(celsius, 1)
+
+
+def slugify(name: str) -> str:
+    """Filename slug for a spot name: lowercase ASCII, hyphen-separated."""
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    return slug or "spot"
+
+
+def report_filename(target_date: str, spot_name: str, verdict: str) -> str:
+    """Report filename per the naming rule: {target-date}-{spot-slug}-{verdict}.md.
+
+    The date is the target day (the day the surfer intends to surf), never
+    the run date; callers fall back to the forecast window's first day.
+    """
+    if verdict not in VERDICT_SLUGS:
+        raise ValueError(f"Verdict must be one of {VERDICT_SLUGS}, got: {verdict!r}")
+    return f"{target_date}-{slugify(spot_name)}-{verdict}.md"
+
+
+def classify_wind(wind_from_deg: float | None, facing_deg: float, speed_ms: float | None) -> str | None:
     """Classify wind relative to the shore.
 
     `facing_deg` is the direction the spot faces looking out to sea.
     Wind direction is meteorological (direction the wind blows FROM), so wind
     coming from the same direction the beach faces is onshore.
-    Anything under 6 kn is 'light' regardless of direction (glassy-ish).
+    Anything under ~3 m/s (6 kn) is 'light' regardless of direction.
     """
     if wind_from_deg is None:
         return None
-    if speed_kn is not None and speed_kn < 6:
+    if speed_ms is not None and speed_ms < LIGHT_WIND_MS:
         return "light"
     diff = abs((wind_from_deg - facing_deg + 180) % 360 - 180)
     if diff <= 45:
@@ -134,21 +203,21 @@ def classify_wind(wind_from_deg: float | None, facing_deg: float, speed_kn: floa
 
 
 def rate_block(
-    swell_ht_ft: float | None,
+    swell_ht_m: float | None,
     swell_period_s: float | None,
-    wind_kn: float | None,
+    wind_ms: float | None,
     wind_type: str | None,
 ) -> dict[str, Any] | None:
-    """Heuristic surf quality score (0-10) for one forecast block.
+    """Heuristic surf quality score (0-10) for one forecast block (SI inputs).
 
     Rewards long-period swell in the rideable size band with light or
     offshore wind; punishes strong onshore wind. This is a generic
     heuristic - it does NOT know spot-specific swell windows, so the skill
     must cross-check against the spot's ideal conditions from research.
     """
-    if swell_ht_ft is None:
+    if swell_ht_m is None:
         return None
-    if swell_ht_ft < 1.0:
+    if swell_ht_m < 0.3:
         return {"score": 0, "rating": "flat"}
 
     score = 0.0
@@ -164,23 +233,23 @@ def rate_block(
         elif swell_period_s >= 7:
             score += 1
 
-    # Size: 2-8 ft significant swell is the sweet spot for most breaks
-    if 2 <= swell_ht_ft <= 8:
+    # Size: 0.6-2.4 m (2-8 ft) significant swell is the sweet spot for most breaks
+    if 0.6 <= swell_ht_m <= 2.4:
         score += 3
-    elif 1 <= swell_ht_ft < 2 or 8 < swell_ht_ft <= 12:
+    elif 0.3 <= swell_ht_m < 0.6 or 2.4 < swell_ht_m <= 3.7:
         score += 2
     else:
         score += 1
 
-    # Wind
+    # Wind (m/s thresholds ~ 25 / 12 / 10 kn)
     if wind_type == "light":
         score += 3
     elif wind_type == "offshore":
-        score += 4 if (wind_kn or 0) <= 25 else 1
+        score += 4 if (wind_ms or 0) <= 13 else 1
     elif wind_type == "cross-shore":
-        score += 2 if (wind_kn or 0) < 12 else 1
+        score += 2 if (wind_ms or 0) < 6 else 1
     elif wind_type == "onshore":
-        score += 1 if (wind_kn or 0) < 10 else 0
+        score += 1 if (wind_ms or 0) < 5 else 0
 
     score = round(min(score, 11) / 11 * 10, 1)
     # Short-period windswell is weak and disorganized regardless of size or
@@ -198,21 +267,21 @@ def rate_block(
     return {"score": score, "rating": rating}
 
 
-def wetsuit_for(water_temp_f: float | None) -> str | None:
-    """Wetsuit recommendation from water temperature (deg F)."""
-    if water_temp_f is None:
+def wetsuit_for(water_temp_c: float | None) -> str | None:
+    """Wetsuit recommendation from water temperature (deg C)."""
+    if water_temp_c is None:
         return None
-    if water_temp_f >= 75:
+    if water_temp_c >= 24:
         return "Boardshorts / rash guard"
-    if water_temp_f >= 70:
+    if water_temp_c >= 21:
         return "1-2mm top or spring suit"
-    if water_temp_f >= 65:
+    if water_temp_c >= 18:
         return "2mm spring suit or 3/2 fullsuit"
-    if water_temp_f >= 58:
+    if water_temp_c >= 14.5:
         return "3/2 fullsuit"
-    if water_temp_f >= 52:
+    if water_temp_c >= 11:
         return "4/3 fullsuit + booties"
-    if water_temp_f >= 43:
+    if water_temp_c >= 6:
         return "5/4 hooded fullsuit + booties + gloves"
     return "6/5+ hooded fullsuit, booties, gloves (extreme cold)"
 
@@ -261,8 +330,7 @@ def fetch_wind_weather(lat: float, lon: float, days: int) -> dict[str, Any]:
             "weather_code,temperature_2m_max,temperature_2m_min,"
             "precipitation_probability_max,uv_index_max"
         ),
-        "wind_speed_unit": "kn",
-        "temperature_unit": "fahrenheit",
+        "wind_speed_unit": "ms",
         "timezone": "auto",
         "forecast_days": days,
     }
@@ -310,6 +378,21 @@ def fetch_tides(lat: float, lon: float, days: int) -> dict[str, Any]:
             "note": TIDE_FALLBACK_NOTE,
         }
 
+    result = _fetch_tide_predictions(nearest["id"], days)
+    if "error" in result:
+        return result
+    result["station"].update(
+        {
+            "name": nearest["name"],
+            "state": nearest.get("state", ""),
+            "distance_km": round(distance_km, 1),
+        }
+    )
+    return result
+
+
+def _fetch_tide_predictions(station_id: str, days: int) -> dict[str, Any]:
+    """Fetch high/low tide predictions for a NOAA station, heights in meters (SI)."""
     begin = datetime.now().strftime("%Y%m%d")
     params = {
         "product": "predictions",
@@ -317,9 +400,9 @@ def fetch_tides(lat: float, lon: float, days: int) -> dict[str, Any]:
         "begin_date": begin,
         "range": days * 24,
         "datum": "MLLW",
-        "station": nearest["id"],
+        "station": station_id,
         "time_zone": "lst_ldt",
-        "units": "english",
+        "units": "metric",
         "interval": "hilo",
         "format": "json",
     }
@@ -331,28 +414,25 @@ def fetch_tides(lat: float, lon: float, days: int) -> dict[str, Any]:
     except Exception as e:
         return {
             "error": str(e),
-            "note": f"Tide predictions failed for station {nearest['id']}. Check https://tidesandcurrents.noaa.gov manually.",
+            "note": f"Tide predictions failed for station {station_id}. Check https://tidesandcurrents.noaa.gov manually.",
         }
 
     events: dict[str, list[dict[str, Any]]] = {}
     for p in predictions:
-        # p: {"t": "2026-07-08 04:12", "v": "5.43", "type": "H"}
+        # p: {"t": "2026-07-08 04:12", "v": "1.655", "type": "H"}
         date_key, time_part = p["t"].split(" ")
         events.setdefault(date_key, []).append(
             {
                 "time": time_part,
-                "height_ft": round(float(p["v"]), 1),
+                "height_m": float(p["v"]),
                 "type": "high" if p["type"] == "H" else "low",
             }
         )
 
     return {
         "station": {
-            "id": nearest["id"],
-            "name": nearest["name"],
-            "state": nearest.get("state", ""),
-            "distance_km": round(distance_km, 1),
-            "url": f"https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={nearest['id']}",
+            "id": station_id,
+            "url": f"https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={station_id}",
         },
         "datum": "MLLW",
         "days": [{"date": d, "events": evs} for d, evs in sorted(events.items())],
@@ -385,16 +465,14 @@ def parse_ndbc_realtime(text: str) -> dict[str, Any] | None:
         if wvht is None:
             continue
         observed_at = f"{row[0]}-{row[1]}-{row[2]} {row[3]}:{row[4]} UTC"
-        wtmp_c = field(row, "WTMP")
         return {
             "observed_at": observed_at,
-            "wave_height_ft": m_to_ft(wvht),
+            "wave_height_m": wvht,
             "dominant_period_s": field(row, "DPD"),
             "mean_wave_direction": compass(field(row, "MWD")),
-            "wind_kn": round(field(row, "WSPD") * 1.94384) if field(row, "WSPD") is not None else None,
+            "wind_ms": field(row, "WSPD"),
             "wind_direction": compass(field(row, "WDIR")),
-            "water_temp_f": c_to_f(wtmp_c),
-            "water_temp_c": wtmp_c,
+            "water_temp_c": field(row, "WTMP"),
         }
     return None
 
@@ -513,8 +591,13 @@ def build_marine_days(
     marine_raw: dict[str, Any],
     wind_raw: dict[str, Any],
     facing: float | None,
+    units: str,
 ) -> list[dict[str, Any]]:
-    """Condense hourly marine + wind data into 3-hour blocks per day (05:00-21:00)."""
+    """Condense hourly marine + wind data into 3-hour blocks per day (05:00-21:00).
+
+    All computation (wind classification, quality rating) runs on SI values;
+    `units` only controls the numbers written into the output blocks.
+    """
     if "error" in marine_raw:
         return []
 
@@ -535,26 +618,26 @@ def build_marine_days(
             ts = f"{date_str}T{hour:02d}:00"
             if ts not in wave_ht:
                 continue
-            spd = wind_speed.get(ts)
+            spd_ms = wind_speed.get(ts)
             wdir = wind_dir.get(ts)
-            wtype = classify_wind(wdir, facing, spd) if facing is not None else None
-            s_ht_ft = m_to_ft(swell_ht.get(ts))
+            wtype = classify_wind(wdir, facing, spd_ms) if facing is not None else None
+            s_ht_m = swell_ht.get(ts)
             s_per = swell_per.get(ts)
             block: dict[str, Any] = {
                 "time": f"{hour:02d}:00",
-                "wave_height_ft": m_to_ft(wave_ht.get(ts)),
-                "swell_height_ft": s_ht_ft,
+                "wave_height": height_out(wave_ht.get(ts), units),
+                "swell_height": height_out(s_ht_m, units),
                 "swell_period_s": s_per,
                 "swell_direction": compass(swell_dir.get(ts)),
                 "swell_direction_deg": swell_dir.get(ts),
-                "wind_wave_height_ft": m_to_ft(wind_wave.get(ts)),
-                "wind_kn": round(spd) if spd is not None else None,
-                "wind_gust_kn": round(wind_gust[ts]) if wind_gust.get(ts) is not None else None,
+                "wind_wave_height": height_out(wind_wave.get(ts), units),
+                "wind_speed": wind_out(spd_ms, units),
+                "wind_gust": wind_out(wind_gust.get(ts), units),
                 "wind_direction": compass(wdir),
                 "wind_type": wtype,
             }
             if facing is not None:
-                block["quality"] = rate_block(s_ht_ft, s_per, spd, wtype)
+                block["quality"] = rate_block(s_ht_m, s_per, spd_ms, wtype)
             blocks.append(block)
 
         def _get(key: str) -> Any:
@@ -565,8 +648,8 @@ def build_marine_days(
             {
                 "date": date_str,
                 "summary": {
-                    "wave_height_max_ft": m_to_ft(_get("wave_height_max")),
-                    "swell_height_max_ft": m_to_ft(_get("swell_wave_height_max")),
+                    "wave_height_max": height_out(_get("wave_height_max"), units),
+                    "swell_height_max": height_out(_get("swell_wave_height_max"), units),
                     "swell_period_max_s": _get("swell_wave_period_max"),
                     "swell_direction_dominant": compass(_get("swell_wave_direction_dominant")),
                 },
@@ -581,7 +664,9 @@ def _block_end(time_str: str) -> str:
     return f"{min(int(time_str[:2]) + 3, 23):02d}{time_str[2:]}"
 
 
-def build_surf_windows(marine_days: list[dict[str, Any]], daylight: dict[str, Any]) -> list[dict[str, Any]]:
+def build_surf_windows(
+    marine_days: list[dict[str, Any]], daylight: dict[str, Any], units: str
+) -> list[dict[str, Any]]:
     """Pick the best-rated surfable-light block per day. Requires --facing (quality present).
 
     A block qualifies if any part of it overlaps first light..last light, and
@@ -607,56 +692,95 @@ def build_surf_windows(marine_days: list[dict[str, Any]], daylight: dict[str, An
         if not candidates:
             continue
         best = max(candidates, key=lambda b: b["quality"]["score"])
+        wind_label = UNIT_LABELS[units]["wind_speed"]
         windows.append(
             {
                 "date": date,
                 "best_time": max(best["time"], first_light),
                 "rating": best["quality"]["rating"],
                 "score": best["quality"]["score"],
-                "swell_height_ft": best["swell_height_ft"],
+                "swell_height": best["swell_height"],
                 "swell_period_s": best["swell_period_s"],
                 "swell_direction": best["swell_direction"],
-                "wind": f"{best['wind_kn']} kn {best['wind_direction']} ({best['wind_type']})"
-                if best.get("wind_kn") is not None
+                "wind": f"{best['wind_speed']} {wind_label} {best['wind_direction']} ({best['wind_type']})"
+                if best.get("wind_speed") is not None
                 else None,
             }
         )
     return windows
 
 
-def build_sea_temperature(marine_raw: dict[str, Any], buoy: dict[str, Any]) -> dict[str, Any]:
+def build_sea_temperature(marine_raw: dict[str, Any], buoy: dict[str, Any], units: str) -> dict[str, Any]:
     """Current water temperature + wetsuit recommendation.
 
     Prefers the buoy's observed water temp over the model SST when both exist
     (they can straddle a wetsuit-thickness boundary); reports both so the
     report can cite its source.
     """
-    model_f = None
+    model_c = None
     if "error" not in marine_raw:
         sst = _hourly_lookup(marine_raw, "sea_surface_temperature")
         values = [v for v in sst.values() if v is not None]
         if values:
-            model_f = c_to_f(values[0])
+            model_c = values[0]
 
-    buoy_f = buoy.get("water_temp_f") if "error" not in buoy else None
+    buoy_c = buoy.get("water_temp_c") if "error" not in buoy else None
 
-    current_f = buoy_f if buoy_f is not None else model_f
-    if current_f is None:
+    current_c = buoy_c if buoy_c is not None else model_c
+    if current_c is None:
         return {
             "error": "No water temperature data at this location",
             "note": "Check Surfline or surf-forecast.com for water temp.",
         }
     return {
-        "current_f": current_f,
-        "current_c": round((current_f - 32) * 5 / 9, 1),
-        "source": "buoy observation" if buoy_f is not None else "model SST",
-        "model_f": model_f,
-        "buoy_f": buoy_f,
-        "wetsuit": wetsuit_for(current_f),
+        "current": temp_out(current_c, units),
+        "source": "buoy observation" if buoy_c is not None else "model SST",
+        "model": temp_out(model_c, units),
+        "buoy": temp_out(buoy_c, units),
+        "wetsuit": wetsuit_for(current_c),
     }
 
 
-def build_weather(wind_raw: dict[str, Any]) -> dict[str, Any]:
+def build_buoy(buoy: dict[str, Any], units: str) -> dict[str, Any]:
+    """Convert the SI buoy observation to the requested output units."""
+    if "error" in buoy:
+        return buoy
+    return {
+        "station": buoy["station"],
+        "observed_at": buoy["observed_at"],
+        "wave_height": height_out(buoy["wave_height_m"], units),
+        "dominant_period_s": buoy["dominant_period_s"],
+        "mean_wave_direction": buoy["mean_wave_direction"],
+        "wind_speed": wind_out(buoy["wind_ms"], units),
+        "wind_direction": buoy["wind_direction"],
+        "water_temp": temp_out(buoy["water_temp_c"], units),
+    }
+
+
+def build_tides(tides: dict[str, Any], units: str) -> dict[str, Any]:
+    """Convert SI tide predictions to the requested output units."""
+    if "error" in tides:
+        return tides
+    return {
+        **tides,
+        "days": [
+            {
+                "date": day["date"],
+                "events": [
+                    {
+                        "time": e["time"],
+                        "height": tide_height_out(e["height_m"], units),
+                        "type": e["type"],
+                    }
+                    for e in day["events"]
+                ],
+            }
+            for day in tides["days"]
+        ],
+    }
+
+
+def build_weather(wind_raw: dict[str, Any], units: str) -> dict[str, Any]:
     """Daily air temp / precip / UV summary."""
     if "error" in wind_raw:
         return {"error": wind_raw["error"], "note": wind_raw.get("note", "")}
@@ -670,8 +794,8 @@ def build_weather(wind_raw: dict[str, Any]) -> dict[str, Any]:
                 "date": date_str,
                 "conditions": label,
                 "icon": icon,
-                "temp_max_f": daily.get("temperature_2m_max", [None])[i],
-                "temp_min_f": daily.get("temperature_2m_min", [None])[i],
+                "temp_max": temp_out(daily.get("temperature_2m_max", [None])[i], units),
+                "temp_min": temp_out(daily.get("temperature_2m_min", [None])[i], units),
                 "precip_probability_pct": daily.get("precipitation_probability_max", [None])[i],
                 "uv_index_max": daily.get("uv_index_max", [None])[i],
             }
@@ -691,10 +815,33 @@ def build_weather(wind_raw: dict[str, Any]) -> dict[str, Any]:
 )
 @click.option("--days", type=int, default=7, help="Forecast days (1-7)")
 @click.option("--tide-station", default=None, help="NOAA CO-OPS station ID override (skips nearest-station lookup)")
-def cli(coordinates: str, spot_name: str, facing: float | None, days: int, tide_station: str | None):
+@click.option(
+    "--units",
+    type=click.Choice(["metric", "imperial"]),
+    default="metric",
+    help="Output units: metric (heights m, wind km/h, temps °C; default) or imperial (ft, kn, °F). "
+    "Precedence: this flag, then the surfer profile (once it exists), then metric.",
+)
+@click.option(
+    "--target-day",
+    default=None,
+    help="Target day (YYYY-MM-DD) the surfer intends to surf; keys the report filename. "
+    "Defaults to the forecast window's first day.",
+)
+def cli(
+    coordinates: str,
+    spot_name: str,
+    facing: float | None,
+    days: int,
+    tide_station: str | None,
+    units: str,
+    target_day: str | None,
+):
     """Fetch surf conditions for a spot and print unified JSON to stdout."""
     try:
         lat, lon = parse_coordinates(coordinates)
+        if target_day is not None:
+            date.fromisoformat(target_day)
     except ValueError as e:
         click.echo(json.dumps({"error": str(e)}))
         sys.exit(1)
@@ -707,14 +854,26 @@ def cli(coordinates: str, spot_name: str, facing: float | None, days: int, tide_
     buoy = fetch_buoy(lat, lon)
 
     if tide_station:
-        tides = _fetch_tides_for_station(tide_station, days)
+        tides = _fetch_tide_predictions(tide_station, days)
     else:
         tides = fetch_tides(lat, lon, days)
 
     tz_name = marine_raw.get("timezone") or wind_raw.get("timezone") or "UTC"
     daylight = fetch_daylight(lat, lon, tz_name, days)
 
-    marine_days = build_marine_days(marine_raw, wind_raw, facing)
+    marine_days = build_marine_days(marine_raw, wind_raw, facing, units)
+
+    # Target date for the report filename: explicit target day, else the
+    # forecast window's first day - never the run date. With no window and no
+    # --target-day it stays null and the gap is reported instead.
+    window_start = None
+    if marine_days:
+        window_start = marine_days[0]["date"]
+    elif daylight.get("days"):
+        window_start = daylight["days"][0].get("date")
+    target_date = target_day or window_start
+    spot_slug = slugify(spot_name)
+
     result: dict[str, Any] = {
         "spot": {
             "name": spot_name,
@@ -723,18 +882,36 @@ def cli(coordinates: str, spot_name: str, facing: float | None, days: int, tide_
             "facing_compass": compass(facing) if facing is not None else None,
             "timezone": tz_name,
         },
+        "units": {"system": units, **UNIT_LABELS[units]},
+        "report": {
+            "directory": "reports",
+            "target_date": target_date,
+            "spot_slug": spot_slug,
+            "filenames": {
+                verdict: f"reports/{report_filename(target_date, spot_name, verdict)}"
+                for verdict in VERDICT_SLUGS
+            }
+            if target_date
+            else None,
+        },
         "marine": {"days": marine_days} if marine_days else marine_raw,
-        "buoy": buoy,
-        "tides": tides,
-        "sea_temperature": build_sea_temperature(marine_raw, buoy),
+        "buoy": build_buoy(buoy, units),
+        "tides": build_tides(tides, units),
+        "sea_temperature": build_sea_temperature(marine_raw, buoy, units),
         "daylight": daylight,
-        "weather": build_weather(wind_raw),
+        "weather": build_weather(wind_raw, units),
     }
 
     if facing is not None and marine_days:
-        result["surf_windows"] = build_surf_windows(marine_days, daylight)
+        result["surf_windows"] = build_surf_windows(marine_days, daylight, units)
     elif facing is None:
         gaps.append("surf_windows and wind classification not computed - pass --facing (degrees the spot faces out to sea)")
+
+    if target_date is None:
+        gaps.append(
+            "report: target date unknown (no forecast window and no --target-day) - "
+            "name the report by the intended surf day, never the run date"
+        )
 
     for key in ("marine", "buoy", "tides", "sea_temperature", "daylight", "weather"):
         section = result.get(key)
@@ -742,52 +919,7 @@ def cli(coordinates: str, spot_name: str, facing: float | None, days: int, tide_
             gaps.append(f"{key}: {section['error']}")
 
     result["gaps"] = gaps
-    click.echo(json.dumps(result, indent=2))
-
-
-def _fetch_tides_for_station(station_id: str, days: int) -> dict[str, Any]:
-    """Fetch tide predictions for an explicit NOAA station ID."""
-    begin = datetime.now().strftime("%Y%m%d")
-    params = {
-        "product": "predictions",
-        "application": "claude-surfing-skills",
-        "begin_date": begin,
-        "range": days * 24,
-        "datum": "MLLW",
-        "station": station_id,
-        "time_zone": "lst_ldt",
-        "units": "english",
-        "interval": "hilo",
-        "format": "json",
-    }
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(NOAA_PREDICTIONS_URL, params=params)
-            response.raise_for_status()
-            predictions = response.json().get("predictions", [])
-    except Exception as e:
-        return {
-            "error": str(e),
-            "note": f"Tide predictions failed for station {station_id}. Check https://tidesandcurrents.noaa.gov manually.",
-        }
-    events: dict[str, list[dict[str, Any]]] = {}
-    for p in predictions:
-        date_key, time_part = p["t"].split(" ")
-        events.setdefault(date_key, []).append(
-            {
-                "time": time_part,
-                "height_ft": round(float(p["v"]), 1),
-                "type": "high" if p["type"] == "H" else "low",
-            }
-        )
-    return {
-        "station": {
-            "id": station_id,
-            "url": f"https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={station_id}",
-        },
-        "datum": "MLLW",
-        "days": [{"date": d, "events": evs} for d, evs in sorted(events.items())],
-    }
+    click.echo(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

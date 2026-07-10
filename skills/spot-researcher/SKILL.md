@@ -99,21 +99,25 @@ uv run python fetch_conditions.py \
   --days 7
 ```
 
-Optional args: `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--days` 1-7 (default 7).
+Optional args: `--units metric|imperial` (default metric: heights m, wind km/h, temps °C; imperial: ft, kn, °F - pass `imperial` when the user asked for it); `--target-day YYYY-MM-DD` keys the report filename to the day the user intends to surf (defaults to the forecast window's first day); `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--days` 1-7 (default 7).
+
+All JSON keys are unit-neutral; read the actual units from the payload's `units` object and label every quantity in the report with them.
 
 This returns JSON with:
 
 - **spot**: echo of inputs + `facing_compass` + `timezone`
-- **marine**: per-day forecast. Each day has `summary` (max wave/swell height ft, max period, dominant direction) and `blocks[]` (3-hourly, 05:00-21:00 local): `wave_height_ft`, `swell_height_ft`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height_ft`, `wind_kn`, `wind_gust_kn`, `wind_direction`, `wind_type` (offshore/onshore/cross-shore/light; requires `--facing`), and `quality` (`score` 0-10 + `rating` flat/poor/fair/good/epic; requires `--facing`)
-- **buoy**: nearest NDBC buoy real observation - `station` (id, name, distance_km, url), `observed_at` (UTC), `wave_height_ft`, `dominant_period_s`, `mean_wave_direction`, `water_temp_f`. This is **observed ground truth** - cross-check the model forecast against it and flag disagreement
-- **tides**: NOAA CO-OPS predictions - `station` (id, name, distance_km, url), `datum` (MLLW), `days[]` with high/low `events[]` (`time`, `height_ft`, `type`). **US only** - non-US spots return an `error` + note (tide-forecast.com / WorldTides fallback)
-- **sea_temperature**: `current_f`, `current_c`, `source` ("buoy observation" preferred over "model SST" when both exist), `model_f`, `buoy_f`, and a deterministic `wetsuit` recommendation
+- **units**: the units in effect - `system` ("metric"/"imperial") plus display labels `wave_height`, `tide_height`, `wind_speed`, `temperature`
+- **report**: report naming inputs - `directory` ("reports"), `target_date` (the target day, falling back to the forecast window's first day - never the run date; null when neither is known), `spot_slug`, and `filenames` (the exact report path per verdict slug, e.g. `{"go": "reports/2026-07-11-mundaka-go.md", "check": ..., "skip": ...}`)
+- **marine**: per-day forecast. Each day has `summary` (`wave_height_max`, `swell_height_max`, `swell_period_max_s`, `swell_direction_dominant`) and `blocks[]` (3-hourly, 05:00-21:00 local): `wave_height`, `swell_height`, `swell_period_s`, `swell_direction`(+`_deg`), `wind_wave_height`, `wind_speed`, `wind_gust`, `wind_direction`, `wind_type` (offshore/onshore/cross-shore/light; requires `--facing`), and `quality` (`score` 0-10 + `rating` flat/poor/fair/good/epic; requires `--facing`)
+- **buoy**: nearest NDBC buoy real observation - `station` (id, name, distance_km, url), `observed_at` (UTC), `wave_height`, `dominant_period_s`, `mean_wave_direction`, `wind_speed`, `wind_direction`, `water_temp`. This is **observed ground truth** - cross-check the model forecast against it and flag disagreement
+- **tides**: NOAA CO-OPS predictions - `station` (id, name, distance_km, url), `datum` (MLLW), `days[]` with high/low `events[]` (`time`, `height`, `type`). **US only** - non-US spots return an `error` + note (tide-forecast.com / WorldTides fallback)
+- **sea_temperature**: `current`, `source` ("buoy observation" preferred over "model SST" when both exist), `model`, `buoy`, and a deterministic `wetsuit` recommendation
 - **daylight**: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours` (dawn patrol planning)
-- **weather**: per-day air conditions - `conditions`, `icon`, `temp_max_f`/`temp_min_f`, `precip_probability_pct`, `uv_index_max`
+- **weather**: per-day air conditions - `conditions`, `icon`, `temp_max`/`temp_min`, `precip_probability_pct`, `uv_index_max`
 - **surf_windows**: best-rated surfable-light block per day (`date`, `best_time`, `rating`, `score`, swell + wind summary) - only present when `--facing` was provided; `best_time` is clamped to first light so it never lands in the dark
 - **gaps**: any API failures or skipped computations
 
-**Important caveat on `quality` ratings:** the script's heuristic is spot-agnostic (period + size + wind). It does NOT know the spot's swell window, ideal tide, or size ceiling. Phase 4 must adjust these ratings using the works-on profile from research (e.g., a 10 ft WNW swell rates "good" generically but closes out a beach break that maxes at 6 ft).
+**Important caveat on `quality` ratings:** the script's heuristic is spot-agnostic (period + size + wind). It does NOT know the spot's swell window, ideal tide, or size ceiling. Phase 4 must adjust these ratings using the works-on profile from research (e.g., a 3 m WNW swell rates "good" generically but closes out a beach break that maxes at 2 m).
 
 **Run this in parallel with Step 3B** - include the Bash command and all 3 Task calls in the same response turn to maximize parallelism.
 
@@ -163,7 +167,7 @@ Research from these sources: Surfline, Wannasurf
   "sources": ["Surfline", "Wannasurf"],
   "spot_profile": {
     "break_type": "...", "bottom": "...", "wave_direction": "left|right|both",
-    "ideal_swell_direction": "...", "ideal_swell_size_ft": "...", "ideal_period_s": "...",
+    "ideal_swell_direction": "...", "ideal_swell_size": "... (state the unit)", "ideal_period_s": "...",
     "ideal_wind": "...", "ideal_tide": "...", "best_season": "...",
     "ability_level": "...", "crowd": "...", "consistency": "..."
   },
@@ -340,7 +344,7 @@ This is the core judgment step - the script's generic `quality` ratings must be 
 1. For each forecast day, compare `swell_direction_deg` against the spot's swell window. Swell outside the window doesn't arrive at the break regardless of size - downgrade to flat/poor and say why.
 2. Compare swell size against the spot's working range. Over the ceiling -> closed out / too heavy; under the minimum -> flat.
 3. Cross-reference **tides**: overlay tide events on the daily surf windows. If the spot needs mid-incoming, shift each day's recommended session time toward the matching tide, even if the raw wind score peaked elsewhere.
-4. Cross-check the **buoy observation** against today's model forecast. If the buoy shows 18 s at 5 ft and the model says 2 ft at 9 s, trust the buoy and note the discrepancy. Interpret the direction of the disagreement: a long-period reading inside the spot's swell window means MORE rideable energy than the model suggests (upside), not just uncertainty.
+4. Cross-check the **buoy observation** against today's model forecast. If the buoy shows 1.5 m at 18 s and the model says 0.6 m at 9 s, trust the buoy and note the discrepancy. Interpret the direction of the disagreement: a long-period reading inside the spot's swell window means MORE rideable energy than the model suggests (upside), not just uncertainty.
 5. Produce a **"This Week's Outlook"**: per-day verdict (skip / worth a check / go) with the best session time and one-line reasoning that references tide + wind + swell together.
 
 #### Step 4C: Hazard Synthesis
@@ -348,7 +352,7 @@ This is the core judgment step - the script's generic `quality` ratings must be 
 Organize hazards by type with explicit, SEPARATE sub-sections - safety-critical, be comprehensive. Extract from spot guides AND session reports:
 
 - **Rip currents:** location relative to the break (channel positions), how locals use them, escape guidance
-- **Rocks / reef:** exposure by tide level ("inside section dries below +2 ft"), entry/exit timing
+- **Rocks / reef:** exposure by tide level ("inside section dries below +0.6 m"), entry/exit timing
 - **Wave hazards:** hold-downs, shallow sections, closeouts, size at which character changes
 - **Marine life:** documented (sharks, urchins, jellyfish, stingrays - include the stingray shuffle where relevant), not speculative
 - **Crowds & localism:** from Agent 3, with evidence level
@@ -401,13 +405,23 @@ Task(
 
 3. **Markdown Formatting Rules:**
    - ALWAYS add blank line before lists and after headers
+   - Label every quantity with the unit labels from the data package's `units` object
+     (JSON keys are unit-neutral); never mix unit systems within the report
    - Use `-` for bullets, `**text**` for bold (sparingly - only critical details)
    - Link specific attributions: any statement from a particular session report or
      guide MUST be a Markdown link [date/source](url), never plain text
    - Every named place (spot, parking, nearby break) gets a Google Maps link
 
 4. **Save the report:**
-   Use the Write tool to save to the user's current working directory: {date}-{spot-name-slug}.md
+   Use the Write tool to save into the `reports/` folder of the user's current
+   working directory (create it if missing), named by the naming rule:
+   reports/{target_date}-{spot_slug}-{verdict}.md
+   - Pick the exact path from the data package's `report.filenames` object using the
+     slug for the target day's verdict from the analysis: go (🟢 Go),
+     check (🟡 Worth a check), or skip (🔴 Skip)
+   - The date in the name is the target day (the day the user intends to surf, falling
+     back to the forecast window's first day) - NEVER the run date
+   - Example: reports/2026-07-11-mundaka-go.md
 
 ## Data Package
 
@@ -417,8 +431,8 @@ Task(
 ```json
 {
   "status": "SUCCESS",
-  "file_path": "/absolute/path/to/report.md",
-  "filename": "YYYY-MM-DD-spot-name.md",
+  "file_path": "/absolute/path/to/reports/report.md",
+  "filename": "reports/{target-date}-{spot-slug}-{go|check|skip}.md",
   "sections_generated": N
 }
 ```"""
@@ -453,6 +467,7 @@ Task(
    - Tide times in the outlook match the tide table
    - Recommended session windows fall in daylight (check against sunrise/sunset)
    - Swell heights/periods consistent across all mentions
+   - One unit system throughout, matching the conditions payload's `units` object - no mixed m/ft or °C/°F
    - Wind called offshore/onshore consistently with the spot's facing direction
 
    **Internal Logic:**
@@ -462,6 +477,8 @@ Task(
    - Wetsuit recommendation matches the stated water temperature
 
    **Completeness:**
+   - Report path is reports/{target-date}-{spot-slug}-{verdict}.md with verdict slug go/check/skip
+     matching the target day's verdict in the Outlook (the date is the target day, not the run date)
    - No placeholder texts like {{spot_name}} or {{YYYY-MM-DD}}
    - All referenced links actually provided
    - Mandatory sections present: Overview, Outlook, Current Conditions, The Wave, Hazards, Information Gaps, Data Sources
@@ -518,10 +535,10 @@ Report to user:
 ```
 Spot research complete for Ocean Beach (SF)!
 
-Report saved to: 2026-07-08-ocean-beach-sf.md
+Report saved to: reports/2026-07-09-ocean-beach-sf-go.md
 
 Summary: Ocean Beach is a heavy, shifty beach break for advanced surfers - powerful rips,
-cold water (57°F, 4/3 + booties), no channel. Best window this week is Thursday 08:00 on
+cold water (14°C, 4/3 + booties), no channel. Best window this week is Thursday 08:00 on
 the incoming mid tide with light E wind before the onshores fill in. Water quality clear;
 main gaps: no recent session reports found.
 
@@ -569,7 +586,7 @@ Every generated report must:
 1. ✅ **Include safety disclaimer** prominently at top
 2. ✅ **Document all information gaps** explicitly
 3. ✅ **Cite sources** with links
-4. ✅ **Use current date** in filename and metadata
+4. ✅ **Name by target day and verdict** - `reports/{target-date}-{spot-slug}-{verdict}.md`, never the run date
 5. ✅ **Follow template structure** exactly
 6. ✅ **Provide actionable information** (session windows keyed to tide + wind + daylight)
 7. ✅ **Emphasize verification** - forecasts are a starting point, the ocean gets the final say
@@ -593,6 +610,8 @@ uv run python fetch_conditions.py \
 - `--spot-name` (required)
 - `--facing N` (optional) - degrees true the spot faces out to sea; enables `wind_type`, `quality`, `surf_windows`
 - `--days N` (optional, default 7, max 7)
+- `--units metric|imperial` (optional, default metric) - output units; precedence: flag, then surfer profile (once it exists), then metric
+- `--target-day YYYY-MM-DD` (optional) - the day the user intends to surf; keys `report.target_date` (defaults to the forecast window's first day)
 - `--tide-station ID` (optional) - NOAA CO-OPS station override
 
 ### Facing Direction Quick Reference
@@ -600,7 +619,7 @@ uv run python fetch_conditions.py \
 - West-facing (California outer coast): ~270. Offshore wind = E
 - North Shore Oahu: ~315-360. Offshore = S/SE (trades are side-off)
 - East coast US: ~90-135. Offshore = W
-- The script treats wind within ±45° of facing as onshore, within ±45° of the reciprocal as offshore, the rest cross-shore; under 6 kn is "light" regardless
+- The script treats wind within ±45° of facing as onshore, within ±45° of the reciprocal as offshore, the rest cross-shore; under ~11 km/h (6 kn) is "light" regardless
 
 ### Map Link Patterns
 
@@ -612,4 +631,4 @@ uv run python fetch_conditions.py \
 
 ---
 
-**Skill Version:** 0.1.0 | **Last Updated:** 2026-07-08
+**Skill Version:** 0.2.0 | **Last Updated:** 2026-07-10
