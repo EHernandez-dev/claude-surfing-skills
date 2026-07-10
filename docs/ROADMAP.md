@@ -1,7 +1,8 @@
 # Roadmap: surf companion features (pre-grilling draft)
 
-> Status: DRAFT, written before requirements grilling. This is input to `/grill-with-docs`,
-> not a committed spec. Decisions recorded during grilling (CONTEXT.md, ADRs, PRD) supersede it.
+> Status: SUPERSEDED (2026-07-10). Grilling is done; the committed spec is
+> [PRD #1](https://github.com/EHernandez-dev/claude-surfing-skills/issues/1) with
+> sub-issues #2-#10, plus CONTEXT.md and docs/adr/. Kept for historical context only.
 
 The v0.1.0 skill produces one-shot markdown research reports. These six increments turn it
 into a surf companion: visual reports, multi-spot planning, proactive alerts, and a spot

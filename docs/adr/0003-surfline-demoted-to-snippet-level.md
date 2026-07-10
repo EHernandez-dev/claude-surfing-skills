@@ -1,0 +1,3 @@
+# Surfline demoted to search-snippet-level, no fetching ladder
+
+The roadmap held two options for Surfline: use its unauthenticated KBYG JSON endpoints in a fetching ladder, or officially demote it. Live probes (both 2026-07-08 e2e runs and again 2026-07-10) return HTTP 403 behind a Cloudflare JS challenge, Surfline states it has no public API, and its Terms of Use prohibit automated access. Decision: no direct fetching of any kind; Surfline information may only enter reports via web-search snippets, and the gap it covered (human spot forecasts) stays manual. Do not re-add scrapers or third-party Surfline wrappers; they violate the terms and are unmaintainable against the challenge wall.
