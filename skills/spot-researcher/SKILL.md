@@ -833,7 +833,3 @@ uv run python fetch_conditions.py \
 - NOAA tides: `https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id={id}`
 - tide-forecast.com (non-US fallback when `WORLDTIDES_KEY` is unset): `https://www.tide-forecast.com/locations/{slug}/tides/latest`
 - WorldTides portal: `https://www.worldtides.info/`
-
----
-
-**Skill Version:** 0.5.0 | **Last Updated:** 2026-07-12
