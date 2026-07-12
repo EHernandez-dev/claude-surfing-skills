@@ -1,0 +1,67 @@
+# Spot profile written by the 2026-07-12 research run (issue #6 e2e,
+# 2026-07-12-la-salvaje-sopelana-check.md). Schema:
+# skills/spot-researcher/assets/spot-profile-template.yaml
+
+name: La Salvaje (Sopelana)
+region: Bizkaia, Basque Country, Spain
+coordinates: [43.3905, -3.0015]
+facing_deg: 340
+
+tide_source: WorldTides # no WORLDTIDES_KEY in the research environment; tides gapped, manual fallback tide-forecast.com/locations/Sopelana
+tide_station: null
+
+buoy:
+  network: Puertos del Estado
+  station_id: "1103"
+  name: Boya Costera de Bilbao II
+  distance_km: 10.4
+
+works_on:
+  swell_direction: NW
+  swell_size: "0.5-1.5 m for the sand banks; La Triangular needs 2.5 m+ and holds 4 m"
+  min_period_s: null # not stated by any fetched guide; short-period windswell still produces learner waves on the banks
+  wind: S-SE offshore
+  tide: all tides on the sand (sandbar A-frame best near high); falling tide ideal per Wannasurf
+  season: year-round; best September-May, summer is the small learner season
+
+break:
+  type: beach # with rock/reef fingers at the named peaks
+  bottom: sand with rock/reef sections
+  direction: both
+  ability: beginner-intermediate on the banks; intermediate-advanced on the reef peaks
+
+peaks:
+  - name: La Triangular
+    character: rocky reef peak at the La Salvaje/Arrietara boundary; longboard right, vertical tubing left at low tide
+    suits: intermediate to advanced
+    works_best: bigger swell (~2.5 m+, holds 4 m), SE offshore; character shifts at low tide
+  - name: mid-beach learner banks
+    character: sandy shifting A-frame peaks where the surf schools teach
+    suits: beginner to intermediate
+    works_best: all tides (best near high), small-to-medium NW swell
+
+hazards:
+  - Rocky bottom at La Triangular and the beach-edge reef fingers
+  - Currents and channels along the beach; buoyed stream outlet mid-beach (unknown sanitary quality)
+  - Crowds can reach hazard levels when the surf is up (surf-forecast.com suggests a helmet)
+  - Cliff-backed access; the ramp collapsed in early 2026 and was restabilized for summer - verify it is open
+  - Localism reputation is guide-level only, no documented incidents (unverified)
+
+webcams:
+  - name: Peña Txuri Surf Eskola cam (La Salvaje / Barinatxe)
+    url: https://www.escueladesurfsopelana.com/en/web-cam/
+    free: true
+  - name: surf-forecast.com La Salvaje cam page
+    url: https://www.surf-forecast.com/breaks/La-Salvaje
+    free: true
+
+notes: >-
+  Multi-peak beach - verdicts should name the peak (learner banks vs La
+  Triangular). Two more peak names (La Batidora west, La Corriente central)
+  appear only in aggregator snippets, unconfirmed. Wannasurf lists ideal swell
+  SE, contradicting geography and every other source (treated as a data error;
+  NW is correct). Clothing-optional beach. Lifeguards in season from ~June 1,
+  11:00-20:00. Rentals at La Salbaje Surf Eskola (~20-40 EUR board+suit) and
+  Pukas Peña Txuri.
+
+last_researched: 2026-07-12

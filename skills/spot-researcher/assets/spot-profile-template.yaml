@@ -40,6 +40,19 @@ break:
   direction: left
   ability: advanced
 
+# peaks (optional): named sub-peaks at multi-peak beaches, so cached checks can
+# name the peak that fits the surfer. Omit the block for single-peak breaks
+# (Mundaka is one peak; the example below shows the shape).
+# peaks:
+#   - name: La Triangular
+#     character: rocky reef peak, hollow and shallow
+#     suits: advanced
+#     works_best: bigger swell, low to mid tide
+#   - name: middle-beach learner banks
+#     character: sandy peaks where the schools teach
+#     suits: beginner to intermediate
+#     works_best: all tides, small to medium swell
+
 # --- logistics and safety, one line each ---
 
 hazards:

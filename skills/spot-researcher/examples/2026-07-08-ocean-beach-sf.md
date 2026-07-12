@@ -193,13 +193,13 @@ Note: Surfline's Ocean Beach cams are paywalled. Use one of the free cams above 
 | [Fort Point](https://www.google.com/maps/search/?api=1&query=Fort+Point+San+Francisco) | On a big W/NW swell when Ocean Beach is closing out: a sheltered left under the Golden Gate Bridge that needs size to break ([Red Bull](https://www.redbull.com/us-en/best-surfing-spots-in-san-francisco)) |
 | [Deadmans](https://www.google.com/maps/search/?api=1&query=Deadmans+surf+San+Francisco) | A step up in consequence near Kelly's Cove for experienced surfers on the right swell ([Wannasurf](https://www.wannasurf.com/spot/North_America/USA/California/SF_Marin/deadmans/)) |
 
-## Session Reports
+## Community Notes
 
-**No recent session reports found.** No dated first-hand accounts (Reddit r/surfing, r/bayarea, or forum posts from the last 12 months) surfaced in the search; results were spot guides and travel articles rather than individual session logs. Treat the forecast with extra caution and verify from the beach. (Consider filing your own afterward, see Post-Session below.)
+**No recent first-hand reports found.** No dated first-hand accounts (Reddit r/surfing, r/bayarea, or forum posts from the last 12 months) surfaced in the search; results were spot guides and travel articles rather than individual first-hand accounts. Treat the forecast with extra caution and verify from the beach. (Log your own session afterward, see Post-Session below.)
 
 ## Information Gaps
 
-- **No recent session reports found:** conditions this week are not ground-truthed by any first-hand account, so the Outlook rests on the model, the buoy, and the spot guides only.
+- **No recent first-hand community reports found:** conditions this week are not ground-truthed by any first-hand account, so the Outlook rests on the model, the buoy, and the spot guides only.
 - **Buoy vs model swell disagreement:** the SF Bar buoy (46237) shows a 17 s WSW groundswell that the Open-Meteo model underrepresents (~10.75 s max) for today. Real energy is likely higher than the model table; the buoy is the better right-now reference.
 - **Sources conflict on ideal tide:** surf-forecast.com says all tide stages work; San Francisco Surfing and general reputation favor mid-to-low with low-tide closeout risk on some banks. Resolve on-site per sandbar.
 - **Water quality current-week grade not confirmed:** the monitoring program and typical clean status are documented, but no specific advisory or grade was retrieved for this exact date. Check beachreportcard.org.

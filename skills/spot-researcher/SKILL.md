@@ -1,11 +1,11 @@
 ---
 name: spot-researcher
-description: Research surf spots worldwide and generate comprehensive surf spot reports, aggregating swell/wind/tide forecasts, live buoy observations, spot guides, session reports, hazards (rip currents, reef, localism), wetsuit recommendations, and access info from Surfline, Wannasurf, surf-forecast.com, NOAA, Puertos del Estado, and Open-Meteo. Use when planning a surf trip or session, or when asked for a surf forecast, spot guide, surf conditions, or wave report.
+description: Research surf spots worldwide and generate comprehensive surf spot reports, aggregating swell/wind/tide forecasts, live buoy observations, spot guides, community notes, hazards (rip currents, reef, localism), wetsuit recommendations, and trip logistics (access, lifeguards, board rentals, food) from Surfline, Wannasurf, surf-forecast.com, NOAA, Puertos del Estado, and Open-Meteo. Use when planning a surf trip or session, or when asked for a surf forecast, spot guide, surf conditions, or wave report.
 ---
 
 # Spot Researcher
 
-Research surf spots worldwide and generate comprehensive spot reports combining data from multiple sources including Surfline, Wannasurf, surf-forecast.com, Open-Meteo marine forecasts, NOAA buoys and tide stations, and community session reports.
+Research surf spots worldwide and generate comprehensive spot reports combining data from multiple sources including Surfline, Wannasurf, surf-forecast.com, Open-Meteo marine forecasts, NOAA buoys and tide stations, and first-hand community notes.
 
 **Data Sources:** This skill aggregates information from specialized surf websites (Surfline, Wannasurf, surf-forecast.com, SurferToday) plus free marine data APIs (Open-Meteo Marine, buoy observations from a regional network registry - NOAA NDBC in the US, Puertos del Estado in Spain - and NOAA CO-OPS tides). Report quality depends on how well-documented the spot is. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern. Tide predictions are automatic for US spots (NOAA) and, when the optional `WORLDTIDES_KEY` environment variable is set, for the rest of the world via WorldTides; otherwise non-US spots get a documented gap with manual lookup links.
 
@@ -44,7 +44,7 @@ Research Progress:
   - [ ] Phase 3b: Researcher agents (3 in parallel - spot guides + community reports)
   - [ ] Phase 3c: Results aggregated
   - [ ] Phase 3d: Access/water quality (inline WebSearch)
-- [ ] Phase 4: Spot Analysis (works-on profile, forecast match, hazards)
+- [ ] Phase 4: Spot Analysis (works-on profile, forecast match, hazards, backup-spot mini-forecast)
 - [ ] Phase 5: Report Generation (Report Writer agent)
 - [ ] Phase 6: Report Review & Validation (Report Reviewer agent)
 - [ ] Phase 7: Spot Profile Update (spots/<slug>.yaml written or updated)
@@ -176,6 +176,12 @@ Research from these sources: Surfline, Wannasurf
    ideal swell direction, ideal wind, ideal tide position and movement,
    swell size range it works in, ability level, crowd, access notes, hazards
 
+## Named Peaks (multi-peak beaches)
+If the guides name distinct peaks or sub-breaks along the beach (e.g. a rocky
+reef peak vs sandy learner banks), list each with its character, the ability
+level it suits, and the condition it works best in. Return an empty list for
+genuinely single-peak breaks - do not invent peaks.
+
 ## Output Format (return EXACTLY this JSON)
 
 ```json
@@ -187,6 +193,9 @@ Research from these sources: Surfline, Wannasurf
     "ideal_wind": "...", "ideal_tide": "...", "best_season": "...",
     "ability_level": "...", "crowd": "...", "consistency": "..."
   },
+  "peaks": [
+    {"name": "...", "character": "bottom + wave one-liner", "suits": "ability level", "works_best": "tide/size/season condition"}
+  ],
   "hazards": ["rips", "rocks at low tide", "..."],
   "urls": {"surfline": "...", "surfline_cam": "...", "wannasurf": "..."},
   "gaps": ["what couldn't be fetched and why"]
@@ -210,8 +219,14 @@ Research from these sources: surf-forecast.com, SurferToday, Wikipedia, MagicSea
 1. Search: "{spot_name} site:surf-forecast.com"
 2. WebFetch the spot page and extract: spot description, break type, reliability/consistency,
    ideal conditions statement ("works best with {swell dir} swell and {wind dir} wind"),
-   best tide position, hazards, nearby alternative spots
-3. If WebFetch fails, use the fetching ladder (cloudscrape.py, then --render), as in:
+   best tide position, hazards, nearby alternative spots, and any named peaks or
+   sub-breaks along the beach (character, ability level, when each works)
+3. For each nearby alternative spot, find approximate coordinates (the surf-forecast
+   or Wannasurf page usually has them; a map lookup works too) - they feed a
+   backup-spot forecast run. Also note the direction the spot faces out to sea in
+   degrees true when a guide or the coastline makes it clear. Use null when either
+   cannot be found, never guess blindly.
+4. If WebFetch fails, use the fetching ladder (cloudscrape.py, then --render), as in:
 
    ```bash
    uv run python {repo_root}/skills/spot-researcher/tools/cloudscrape.py "{url}"
@@ -238,8 +253,11 @@ MSW guide text sometimes surfaces in search results and is fine as background.
     "best_season": "...", "ability_level": "..."
   },
   "character_notes": "reputation, wave character, notable facts",
+  "peaks": [
+    {"name": "...", "character": "...", "suits": "ability level", "works_best": "..."}
+  ],
   "hazards": ["..."],
-  "nearby_spots": [{"name": "...", "note": "backup option when..."}],
+  "nearby_spots": [{"name": "...", "note": "backup option when...", "approx_coordinates": "lat,lon or null", "facing_deg": "degrees true or null"}],
   "urls": {"surf_forecast": "...", "surfertoday": "...", "wikipedia": "..."},
   "gaps": ["what couldn't be fetched and why"]
 }
@@ -247,24 +265,30 @@ MSW guide text sometimes surfaces in search results and is fine as background.
 )
 ```
 
-**Agent 3: Community reports + access (Reddit, forums, webcams)**
+**Agent 3: Community notes + trip logistics (communities, webcams, lifeguards, rentals, food)**
 
 ```
 Task(
   subagent_type="general-purpose",
   model="sonnet",
-  prompt="""You are a surf researcher gathering recent first-hand information for {spot_name} ({latitude},{longitude}).
+  prompt="""You are a surf researcher gathering recent first-hand information and trip logistics for {spot_name} ({latitude},{longitude}).
 
 ## Your Assignment
-Find recent session reports, local knowledge, and practical access info.
+Find recent first-hand community notes, local knowledge, and practical trip logistics.
 
-## Community Reports
+## Community Notes
+Recent first-hand accounts from ANY web-searchable surf community - Reddit,
+regional forums, local surf club or school pages, dated blog and video posts.
 1. Search: "{spot_name} reddit surf" and "site:reddit.com {spot_name} surf"
    (r/surfing plus regional subs like r/SanDiego, r/bayarea, r/Portugal_Surf)
-2. Search: "{spot_name} surf report {current_month} {current_year}"
+2. Search: "{spot_name} surf report {current_month} {current_year}" and
+   "{spot_name} surf forum" (regional forums and local club/school posts count)
 3. Extract from each useful post: approximate date, what conditions were like,
    crowd notes, hazards encountered, localism warnings, board choice
 4. Prioritize posts from the last 12 months. Note the date on everything.
+5. If nothing first-hand and dated surfaces, return an empty community_notes list -
+   the report renders an explicit "no recent first-hand reports found" state.
+   Checked-and-absent is a valid result; do NOT pad the list with guide content.
 
 ## Localism & Etiquette
 1. Search: "{spot_name} localism" and "{spot_name} surf etiquette locals"
@@ -277,16 +301,35 @@ Find recent session reports, local knowledge, and practical access info.
    walking distance, facilities (showers/toilets), free webcam URLs
    (Surfline cams are paywalled - prefer free cams: city/harbor/hotel cams, windy.com webcams)
 
+## Lifeguards
+1. Search: "{spot_name} lifeguard" and "{beach/municipality} lifeguard season hours"
+2. Extract: whether the beach is lifeguarded, the season and daily hours, with the
+   source URL. If nothing is found, say so - do not assume coverage either way.
+
+## Board Rentals
+1. Search: "{spot_name} surfboard rental" and "{spot_name} surf school hire prices"
+2. Extract: rental shops / surf schools at or near the beach, what they rent
+   (softboards, hardboards, wetsuits), price estimates with currency, URLs.
+   Mark every price as an estimate; note the date/season it applies to.
+
+## Food
+1. Search: "{spot_name} beach cafe restaurant" and "{nearest town} breakfast near beach"
+2. Extract 2-3 places to eat near the break: name, type (cafe/bar/restaurant),
+   one-liner on when it makes sense (pre-dawn coffee, post-session menu).
+
 ## Output Format (return EXACTLY this JSON)
 
 ```json
 {
   "sources": ["Reddit", "forums", "webcams"],
-  "session_reports": [
+  "community_notes": [
     {"date": "...", "source_url": "...", "summary": "...", "conditions": "...", "crowd": "...", "hazards": "..."}
   ],
   "localism": {"level": "none|mild|moderate|heavy|unknown", "notes": "...", "evidence": "..."},
   "access": {"parking": "...", "entry_exit": "...", "facilities": "...", "fees": "..."},
+  "lifeguards": {"covered": "yes|no|unknown", "season_hours": "...", "source_url": "..."},
+  "rentals": [{"name": "...", "offers": "...", "price_estimate": "... (currency, per what)", "url": "..."}],
+  "food": [{"name": "...", "type": "...", "note": "when/why to go"}],
   "webcams": [{"name": "...", "url": "...", "free": true}],
   "gaps": ["what couldn't be found"]
 }
@@ -305,12 +348,16 @@ After the Python script and all agents return, aggregate into a unified data str
   "conditions": { /* from fetch_conditions.py */ },
   "spot_data": {
     "profile": { /* merged spot_profile from Agents 1+2; note conflicts */ },
+    "peaks": [ /* merged from Agents 1+2; empty for single-peak breaks */ ],
     "hazards": [ /* merged */ ],
-    "session_reports": [ /* from Agent 3 */ ],
+    "community_notes": [ /* from Agent 3; empty list = checked and absent */ ],
     "localism": { /* from Agent 3 */ },
     "access": { /* from Agent 3 */ },
+    "lifeguards": { /* from Agent 3 */ },
+    "rentals": [ /* from Agent 3 */ ],
+    "food": [ /* from Agent 3 */ ],
     "webcams": [ /* from Agent 3 */ ],
-    "nearby_spots": [ /* from Agent 2 */ ],
+    "nearby_spots": [ /* from Agent 2, with approx_coordinates for Step 4E */ ],
     "urls": { /* merged */ }
   },
   "gaps": [ /* merged gaps from all sources */ ]
@@ -350,6 +397,7 @@ Merge Agent 1 + Agent 2 spot profiles into one:
 - **Ideal tide:** position (low/mid/high) and movement (incoming/outgoing)
 - **Ability level** and consequence level
 - **Best season** and consistency
+- **Named peaks** (multi-peak beaches): merge the peaks lists from Agents 1+2 into one entry per peak (name, character, who it suits, when it works). Empty for single-peak breaks.
 
 Note conflicts between sources explicitly ("Wannasurf says all tides; surf-forecast says mid-to-high").
 
@@ -363,10 +411,11 @@ This is the core judgment step - the script's generic `quality` ratings must be 
 4. Cross-check the **buoy observation** against today's model forecast. If the buoy shows 1.5 m at 18 s and the model says 0.6 m at 9 s, trust the buoy and note the discrepancy. Interpret the direction of the disagreement: a long-period reading inside the spot's swell window means MORE rideable energy than the model suggests (upside), not just uncertainty.
 5. Produce a **"This Week's Outlook"**: per-day verdict (skip / worth a check / go) with the best session time and one-line reasoning that references tide + wind + swell together.
 6. **Personalize for the surfer** (when `surfer.yaml` exists): verdicts are for THIS surfer, not a generic expert. Weigh their skill level and comfort zone (a small clean day is a Go for a beginner; a day past their comfort zone is a Skip for them even when the wave is world-class), name the board from their quiver that fits each Go / Worth-a-check day, and respect their scheduling constraints (target days, dawn-patrol willingness, notes).
+7. **Name the peak at multi-peak beaches:** when Step 4A produced named peaks that differ in ability level, verdicts and the "Bottom line for your day" name the peak that fits this surfer ("Go, on the learner banks; stay off La Triangular"), not just the beach.
 
 #### Step 4C: Hazard Synthesis
 
-Organize hazards by type with explicit, SEPARATE sub-sections - safety-critical, be comprehensive. Extract from spot guides AND session reports:
+Organize hazards by type with explicit, SEPARATE sub-sections - safety-critical, be comprehensive. Extract from spot guides AND community notes:
 
 - **Rip currents:** location relative to the break (channel positions), how locals use them, escape guidance
 - **Rocks / reef:** exposure by tide level ("inside section dries below +0.6 m"), entry/exit timing
@@ -382,9 +431,20 @@ Explicitly document what was **not found or unreliable:**
 
 - No tide data (non-US spot, no `WORLDTIDES_KEY`) - link tide-forecast.com for the location
 - Facing direction estimated rather than confirmed
-- No recent session reports
+- No recent first-hand community reports
 - Conflicting ideal-tide claims between sources
 - Buoy too far away to be representative
+
+#### Step 4E: Backup-Spot Mini-Forecast
+
+When the **target day's verdict is Go or Worth a check**, the Nearby Alternatives section must be data-backed, not bare names (a blown-out first choice should not end the morning):
+
+1. Pick the **top 1-2 alternatives** from `nearby_spots` - prefer ones that already have a `spots/<slug>.yaml` profile in the surf folder, then ones with `approx_coordinates` from Agent 2.
+2. Get coordinates: the spot profile if one exists, else the agent's `approx_coordinates`, else a quick geocode (`https://geocoding-api.open-meteo.com/v1/search?name={name}&count=5`), nudged into the water. If no coordinates can be found, keep the bare name, and record the missing mini-forecast in gaps.
+3. Run `fetch_conditions.py` once per alternative, same `--units` and `--target-day` as the main run (pass `--spot-file` when profiled, else `--coordinates`/`--spot-name`; add `--facing` only if known; `--days` can be short, just covering the target day). These runs are cheap; run them in parallel in one message.
+4. Add each result's target-day summary to the data package as `backup_forecasts`: spot name, coordinates, swell (height @ period from direction), wind (classified when facing was passed, raw otherwise), and a tide/daylight note for the main report's recommended window.
+
+When the target day's verdict is Skip, the mini-forecast is optional; a bare-name table suffices.
 
 ### Phase 5: Report Generation
 
@@ -392,7 +452,7 @@ Explicitly document what was **not found or unreliable:**
 
 #### Step 5A: Prepare Data Package
 
-Organize all gathered and analyzed data into structured JSON (conditions + spot_data + analysis + gaps, per Step 3C plus Phase 4 outputs). When `surfer.yaml` exists, include its contents as `surfer_profile` so the writer can render the "Bottom line for your day" block.
+Organize all gathered and analyzed data into structured JSON (conditions + spot_data + analysis + gaps, per Step 3C plus Phase 4 outputs, including `backup_forecasts` from Step 4E when the target day is a Go / Worth a check). When `surfer.yaml` exists, include its contents as `surfer_profile` so the writer can render the "Bottom line for your day" block.
 
 #### Step 5B: Dispatch Report Writer Agent
 
@@ -412,11 +472,20 @@ Task(
    - AI disclaimer (prominent ocean-safety warning)
    - Overview: break type, skill level, best season, works-on profile
    - This Week's Outlook: per-day verdict table with best session windows
+     (when a target day is set, the Daylight and Weather tables may collapse
+     to that day - the template sanctions it; the Outlook keeps the full window)
    - Current Conditions: swell forecast, buoy observation, tides, wind, water temp/wetsuit, daylight
-   - The Wave: how it breaks, sections, ideal conditions
+   - The Wave: how it breaks, sections, ideal conditions; a Peaks sub-section
+     whenever the beach has named peaks (mandatory in that case)
    - Hazards: comprehensive, separate sub-sections
-   - Access & Logistics: parking, entry/exit, webcams
-   - Session Reports: dated community reports with links
+   - Access & Logistics: parking, entry/exit, webcams, plus the mandatory
+     Lifeguards, Board rentals (with price estimates), and Food entries -
+     each populated or explicitly marked not found
+   - Nearby Alternatives: when the target day's verdict is Go or Worth a check,
+     a mini-forecast table from the data package's backup_forecasts (real fetcher
+     numbers, never copied from the main spot or invented)
+   - Community Notes: dated first-hand accounts with links, or the explicit
+     "no recent first-hand reports found" empty state - never omit the section
    - Information Gaps: explicitly list missing data
    - Data Sources: links to all sources used
 
@@ -425,7 +494,7 @@ Task(
    - Label every quantity with the unit labels from the data package's `units` object
      (JSON keys are unit-neutral); never mix unit systems within the report
    - Use `-` for bullets, `**text**` for bold (sparingly - only critical details)
-   - Link specific attributions: any statement from a particular session report or
+   - Link specific attributions: any statement from a particular community note or
      guide MUST be a Markdown link [date/source](url), never plain text
    - Every named place (spot, parking, nearby break) gets a Google Maps link
 
@@ -492,13 +561,30 @@ Task(
    - Buoy vs model discrepancies are flagged, not silently averaged
    - Hazard warnings align with the break type (reef spots mention the reef; beach breaks mention rips)
    - Wetsuit recommendation matches the stated water temperature
+   - At multi-peak beaches (report has a Peaks sub-section), verdicts and the
+     bottom line name the peak that fits the surfer, not just the beach
 
    **Completeness:**
    - Report path is reports/{target-date}-{spot-slug}-{verdict}.md with verdict slug go/check/skip
      matching the target day's verdict in the Outlook (the date is the target day, not the run date)
    - No placeholder texts like {{spot_name}} or {{YYYY-MM-DD}}
    - All referenced links actually provided
-   - Mandatory sections present: Overview, Outlook, Current Conditions, The Wave, Hazards, Information Gaps, Data Sources
+   - Mandatory sections present: Overview, Outlook, Current Conditions, The Wave, Hazards,
+     Access & Logistics, Community Notes, Information Gaps, Data Sources
+   - If the data package names peaks (multi-peak beach): a Peaks sub-section is present
+     under The Wave with one entry per named peak
+   - Access & Logistics contains Lifeguards, Board rentals, and Food entries, each populated
+     or explicitly marked not found (rental prices marked as estimates)
+   - Community Notes has dated, hyperlinked first-hand accounts OR the explicit
+     "no recent first-hand reports found" empty state - an empty section body is a FAIL,
+     the honest empty state is a PASS
+   - If the target day's verdict is Go or Worth a check: Nearby Alternatives contains a
+     mini-forecast table with real fetched numbers for 1-2 backups (bare spot names alone
+     are an Important issue; a backup honestly marked "not fetched" with a matching
+     Information Gaps entry is acceptable)
+   - SANCTIONED, do not flag: when a target day is set, the Daylight and Weather tables may
+     collapse to that single day. This is template-sanctioned focus, not missing data;
+     only the Outlook table must cover the full forecast window
 
    **Safety & Responsibility:**
    - AI disclaimer present and prominent
@@ -545,6 +631,7 @@ Write or update `spots/{spot_slug}.yaml` in the user's working directory (create
 - `buoy`: pinned from the conditions payload's `buoy.station` (`network` is the registry name, e.g. "NOAA NDBC" or "Puertos del Estado", plus `station_id`, `name`, `distance_km`); omit the block when no buoy was in range
 - `works_on` from Step 4A (swell direction, size range, minimum period, wind, tide, season)
 - `break` (type, bottom, direction, ability)
+- `peaks` (multi-peak beaches only): one entry per named peak from Step 4A (name, character, suits, works_best), so cached conditions checks can name the peak that fits the surfer; omit the block for single-peak breaks
 - `hazards` as one-liners from Step 4C
 - `webcams` (free ones first)
 - `notes`: anything a future quick check must know (tide windows, localism, seasonal character)
@@ -578,7 +665,7 @@ Spot profile saved to: spots/ocean-beach-sf.yaml (future conditions checks skip 
 Summary: Ocean Beach is a heavy, shifty beach break for advanced surfers - powerful rips,
 cold water (14°C, 4/3 + booties), no channel. Best window this week is Thursday 08:00 on
 the incoming mid tide with light E wind before the onshores fill in. Water quality clear;
-main gaps: no recent session reports found.
+main gaps: no recent first-hand community reports found.
 
 Next steps: check the cam before driving out, and verify conditions from the beach -
 OB changes block by block. If in doubt, don't paddle out.
@@ -674,4 +761,4 @@ uv run python fetch_conditions.py \
 
 ---
 
-**Skill Version:** 0.3.0 | **Last Updated:** 2026-07-10
+**Skill Version:** 0.4.0 | **Last Updated:** 2026-07-12

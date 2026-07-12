@@ -130,6 +130,8 @@ Water temperature not available ({sea_temperature.error}). Check Surfline or sur
 
 {Per day from daylight.days[]. Surfable light runs from first light to last light; the best glass is often the dawn window before the wind comes up.}
 
+{If a target day is set: this table MAY collapse to the target day only (one row, optionally plus the next day when a dawn window could spill over). This single-day collapse is sanctioned by the template - a collapsed table is not an incompleteness issue. The Outlook table always keeps the full forecast window.}
+
 | Date | First light | Sunrise | Sunset | Last light | Daylight |
 |------|-------------|---------|--------|------------|----------|
 | {Day} {Mon} {DD} | {first_light} | {sunrise} | {sunset} | {last_light} | {daylight_hours} hrs |
@@ -139,6 +141,8 @@ Water temperature not available ({sea_temperature.error}). Check Surfline or sur
 ### Weather & UV
 
 {Per day from weather.days[].}
+
+{If a target day is set: this table MAY collapse to the target day only, same sanction as the Daylight table. The Outlook table always keeps the full forecast window.}
 
 | Date | Conditions | Air (H/L) | Precip | UV max |
 |------|-----------|-----------|--------|--------|
@@ -164,9 +168,19 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 {How the wave actually breaks, synthesized from spot guides. Cover: takeoff zone and peak behavior, how it sections and where the makeable part is, how the character changes with size and tide (e.g. "fun and rippable at 0.6-1.2 m mid tide; walls up and closes out over 2 m; the inside dries out below +0.6 m", in the report's units). Whenever a detail comes from a specific guide or report, hyperlink the attribution as a Markdown link (e.g. "[Wannasurf]({url}) describes..."), never plain text. Note conflicts between sources explicitly rather than silently picking one.}
 
+### Peaks
+
+{MANDATORY whenever the beach has multiple named peaks or sub-breaks (e.g. a rocky reef peak vs the learner banks). One row per named peak; each named peak gets a Google Maps link where its position is known. Omit the whole subsection only for genuinely single-peak breaks.}
+
+| Peak | Character | Who it suits | Works best |
+|------|-----------|--------------|------------|
+| {name} | {bottom + wave character one-liner} | {ability level} | {tide / swell size / season condition} |
+
+{When peaks differ in ability level, the Outlook verdicts and the "Bottom line for your day" must name the peak that fits this surfer (e.g. "Go, on the learner banks; stay off La Triangular"), not just the beach.}
+
 ## Hazards
 
-{Safety-critical. Synthesized from spot guides AND session reports. Use separate bold sub-entries per Phase 4C. Omit any sub-entry with no data rather than guessing; if the break type makes an absent hazard notable (e.g. a reef break with no reef detail), note that absence in Information Gaps.}
+{Safety-critical. Synthesized from spot guides AND community notes. Use separate bold sub-entries per Phase 4C. Omit any sub-entry with no data rather than guessing; if the break type makes an absent hazard notable (e.g. a reef break with no reef detail), note that absence in Information Gaps.}
 
 **Rip currents:** {Location relative to the break (channel positions, next to groins/piers/rocks), how locals use them to paddle out, and escape guidance (paddle parallel to shore, do not fight it). If no source mentions rips: omit here, note in gaps if expected for the break type.}
 
@@ -182,12 +196,15 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 ## Access & Logistics
 
-{Parking (lot / street / permit / fees), the paddle-out entry and exit points, walk-in distance, and facilities (showers, toilets, shop). Every named place gets a Google Maps link. If a detail was not found, say so rather than inventing it.}
+{Parking (lot / street / permit / fees), the paddle-out entry and exit points, walk-in distance, and facilities (showers, toilets, shop). Every named place gets a Google Maps link. If a detail was not found, say so rather than inventing it. The **Lifeguards**, **Board rentals**, and **Food** entries are MANDATORY: each is either populated or explicitly marked not found, never silently omitted.}
 
 - **Parking:** {situation, fees}
 - **Entry / exit:** {where to paddle out and get back in}
 - **Facilities:** {showers / toilets / shops, or "none noted"}
 - **Fees:** {parking or access fees, or "none noted"}
+- **Lifeguards:** {coverage season and hours with a source link (e.g. "mid-June to mid-September, 11:00-19:00, [source]({url})"), or "no lifeguard service noted" / "coverage not confirmed - check locally". If the report recommends a session outside lifeguard hours or season, say so here.}
+- **Board rentals:** {rental options with price estimates and links (e.g. "[{shop/school}]({url}): softboard + wetsuit ~{price}/half-day"), or "no rental options found nearby". Mark price estimates as estimates with their date; prices drift.}
+- **Food:** {2-3 nearby places to eat with Google Maps links and a one-liner each (what it is, when it makes sense: pre-dawn coffee, post-session menu), or "no food options found nearby".}
 
 {If webcams found:}
 
@@ -199,27 +216,35 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 ## Nearby Alternatives
 
-{If backup spots found (from Agent 2 nearby_spots):}
+{If the target day's verdict is 🟢 Go or 🟡 Worth a check: a **backup-spot mini-forecast is MANDATORY** for the top 1-2 alternatives, backed by real `fetch_conditions.py` runs (Step 4E in SKILL.md) - never bare spot names. The point: a blown-out first choice should not end the morning.}
 
-| Spot | When to choose it |
-|------|-------------------|
-| [{name}](https://www.google.com/maps/search/?api=1&query={name}) | {one line: the swell/wind/tide/crowd condition that makes this the better call} |
+| Spot | Target-day forecast | Wind | Tide / daylight note | When to choose it |
+|------|---------------------|------|----------------------|-------------------|
+| [{name}](https://www.google.com/maps/search/?api=1&query={lat},{lon}) | {swell ht @ period from dir, from the alternative's fetcher run} | {speed {units.wind_speed} + dir, offshore/onshore if facing known, else raw} | {tide state / best light during the main spot's recommended window} | {one line: the swell/wind/tide/crowd condition that makes this the better call} |
 
-{If none found: omit this section, or note in Information Gaps if the spot is known to have well-documented neighbors.}
+{Format notes:
 
-## Session Reports
+- The forecast columns come from a real fetcher run for that alternative's coordinates, same target day and units as the main report - never copied from the main spot or guessed.
+- If the fetcher could not be run for an alternative (no coordinates found), keep the row with its name and "when to choose it" line, leave the forecast columns as "not fetched", and list it in Information Gaps.
+- If the alternative's facing direction is unknown, give raw wind direction + speed and say classification was skipped.}
 
-{Dated community reports from Agent 3. Each attribution is a Markdown link to the source, never plain text. Note the date on everything.}
+{If the target day's verdict is 🔴 Skip: the mini-forecast is optional; a bare-name table (Spot | When to choose it) suffices.}
 
-{If reports found:}
+{If no backup spots found: omit this section, or note in Information Gaps if the spot is known to have well-documented neighbors.}
+
+## Community Notes
+
+{MANDATORY section: recent first-hand accounts from any web-searchable surf community - forums, Reddit, regional communities, dated blog or video posts. Each attribution is a Markdown link to the source, never plain text. Note the date on everything; prioritize the last 12 months. This section never disappears: when nothing is found it shows the explicit empty state below - an empty section means checked-and-absent, never broken. (This is the community's voice; the surfer's own session logs live in `sessions/`, not here.)}
+
+{If notes found:}
 
 - **{YYYY-MM-DD}** - [{source / author}]({source_url}): {one-line summary of conditions, crowd, hazards}
 
-{If 3 or more reports found, add:}
-**Consensus patterns:** {recurring themes across reports: reliable tide/wind combos, crowd timing, common hazards}
+{If 3 or more notes found, add:}
+**Consensus patterns:** {recurring themes across notes: reliable tide/wind combos, crowd timing, common hazards}
 
-{If no session reports found:}
-**No recent session reports found.** Nobody's first-hand account surfaced in the search. Treat the forecast with extra caution and verify from the beach. (Consider filing your own afterward, see Post-Session below.)
+{If no community notes found:}
+**No recent first-hand reports found.** Searches across surf forums, Reddit, and regional communities surfaced no dated first-hand account from roughly the last 12 months. Treat the forecast with extra caution and verify from the beach. (Log your own session afterward, see Post-Session below.)
 
 ## Information Gaps
 
@@ -228,7 +253,9 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 - {If non-US spot and tides gapped out: "No automated tide data (spot outside NOAA coverage, no WORLDTIDES_KEY set). Tides must be checked manually at tide-forecast.com."}
 - {If facing was estimated: "Facing direction was estimated from coastline geometry, not confirmed by a spot guide. Wind offshore/onshore classification may be off."}
 - {If facing was not provided at all: "Wind classification and surf windows were not computed (--facing not passed). Wind shown as raw direction/speed only."}
-- {If no recent session reports: "No recent session reports found; conditions not ground-truthed by first-hand accounts."}
+- {If no recent community notes: "No recent first-hand community reports found; conditions not ground-truthed by first-hand accounts."}
+- {If a backup alternative could not be fetched: "Backup spot {name} listed without a mini-forecast (no coordinates found for a fetcher run)."}
+- {If lifeguard coverage / rentals / food could not be confirmed: "Lifeguard coverage not confirmed" / "No board rental options found" / "No food options found nearby" - whichever apply.}
 - {If sources conflicted on ideal tide/swell: "Sources disagree on ideal tide (e.g. Wannasurf says all tides, surf-forecast says mid-to-high). Resolve on-site."}
 - {If buoy too far: "Nearest reporting buoy is {distance} km away and may not represent this break."}
 - {If a hazard expected for the break type is undocumented: "No reef/rock detail found despite this being a reef break; scout entry/exit and tide exposure carefully."}
