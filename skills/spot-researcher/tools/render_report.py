@@ -172,6 +172,18 @@ def html_output_path(package: dict[str, Any]) -> str:
     return md_path + ".html"
 
 
+def week_output_path(package: dict[str, Any]) -> str:
+    """Default week-mode output path: reports/{week.start}-week.html.
+
+    Raises KeyError/TypeError when week.start is missing so the CLI can turn it
+    into the soft-failure JSON.
+    """
+    start = package["week"]["start"]
+    if not start:
+        raise KeyError("week.start")
+    return f"reports/{start}-week.html"
+
+
 # ---------------------------------------------------------------------------
 # Tide-curve SVG (pure: geometry only, colours come from page CSS classes)
 # ---------------------------------------------------------------------------
@@ -434,6 +446,55 @@ body {
 }
 """
 
+# Week-planner-only styling, appended after PAGE_CSS so single-mode output stays
+# byte-identical. Reuses the palette, chip styles, cards, and dark mode above.
+WEEK_CSS = """
+.hero-week .overlay { max-width: 640px; }
+.hero-week .overlay .range { margin: 8px 0 2px; font-size: 1.5rem; font-weight: 700; }
+.hero-week .overlay .count { margin: 0; color: #cdd8e4; font-size: 0.98rem; }
+.rank-row {
+  display: grid; grid-template-columns: 40px 92px 1fr auto; gap: 6px 14px;
+  align-items: baseline; padding: 12px 0; border-top: 1px solid var(--border);
+}
+.rank-row:first-of-type { border-top: none; }
+.rank-num { font-weight: 800; font-size: 1.1rem; color: var(--muted); }
+.rank-when { font-weight: 700; }
+.rank-spot { font-weight: 700; }
+.rank-window { color: var(--muted); font-size: 0.92rem; }
+.rank-detail { grid-column: 3 / 5; color: var(--muted); font-size: 0.92rem; margin-top: 2px; }
+.rank-why { grid-column: 3 / 5; font-size: 0.92rem; margin-top: 2px; }
+.rank-best {
+  background: var(--card); border: 1px solid var(--accent); border-radius: 12px;
+  padding: 14px 16px; margin: 4px 0; border-top: 1px solid var(--accent);
+}
+.rank-best .rank-num { color: var(--accent); }
+.spot-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.spot-head h2 { margin: 0; }
+.spot-source { margin: 2px 0 10px; color: var(--muted); font-size: 0.82rem; }
+.flag {
+  display: inline-block; font-weight: 700; font-size: 0.74rem; letter-spacing: 0.02em;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-border);
+}
+.flag-soft { background: var(--page); color: var(--muted); border-color: var(--border); }
+.day-row {
+  display: flex; align-items: baseline; gap: 12px; padding: 9px 0;
+  border-top: 1px solid var(--border); flex-wrap: wrap;
+}
+.day-row:first-of-type { border-top: none; }
+.day-date { width: 78px; font-weight: 700; flex: none; }
+.day-chip { width: 148px; flex: none; }
+.day-time { width: 56px; flex: none; color: var(--muted); font-size: 0.9rem; }
+.day-detail { color: var(--muted); font-size: 0.92rem; flex: 1 1 240px; }
+@media (max-width: 800px) {
+  .rank-row { grid-template-columns: 34px 1fr; }
+  .rank-window, .rank-detail, .rank-why { grid-column: 1 / 3; }
+  .day-row { flex-wrap: wrap; }
+  .day-chip, .day-time { width: auto; }
+  .day-detail { flex-basis: 100%; }
+}
+"""
+
 # The map init is a few inline lines. Literal {z}/{x}/{y} in the tile template
 # must survive verbatim, so lat/lon are substituted via sentinels (not .format
 # or an f-string, which would choke on the braces).
@@ -448,6 +509,43 @@ MAP_JS = """(function () {
     radius: 9, weight: 2, color: '#ffffff', fillColor: '#2b7cd3', fillOpacity: 0.9
   }).addTo(map);
 })();"""
+
+# Week map: one marker per spot with a name + best-verdict popup, auto-fit to
+# the group. Spots are injected as a JSON array via a sentinel (the same brace-
+# safe substitution trick MAP_JS uses for the literal {z}/{x}/{y} tile template).
+WEEK_MAP_JS = """(function () {
+  var spots = __SPOTS__;
+  var map = L.map('surf-map', { scrollWheelZoom: false });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '\\u00a9 OpenStreetMap'
+  }).addTo(map);
+  var markers = spots.map(function (s) {
+    return L.circleMarker([s.lat, s.lon], {
+      radius: 9, weight: 2, color: '#ffffff', fillColor: '#2b7cd3', fillOpacity: 0.9
+    }).addTo(map).bindPopup('<strong>' + s.name + '</strong><br>' + s.best);
+  });
+  if (markers.length === 1) {
+    map.setView([spots[0].lat, spots[0].lon], 11);
+  } else if (markers.length > 1) {
+    map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2));
+  } else {
+    map.setView([0, 0], 2);
+  }
+})();"""
+
+
+def _swell_wind(entry: dict[str, Any]) -> str:
+    """The "swell · wind" display join for a day or ranking entry; parts optional."""
+    return " · ".join(str(entry[k]) for k in ("swell", "wind") if entry.get(k))
+
+
+def _entry_detail(entry: dict[str, Any]) -> str:
+    """The "swell · wind - why" display line shared by week day rows; parts optional."""
+    detail = _swell_wind(entry)
+    if entry.get("why"):
+        detail = f"{detail} - {entry['why']}" if detail else str(entry["why"])
+    return detail
 
 
 def render(package: dict[str, Any]) -> str:
@@ -545,10 +643,7 @@ def render(package: dict[str, Any]) -> str:
             d = entry.get("date")
             day_label = f"{_weekday(d, WEEKDAY_ABBR)} {date.fromisoformat(d).day}" if d else "?"
             chip = _verdict_chip(entry.get("verdict", "check"), extra_class="week-verdict")
-            detail_bits = [str(entry[k]) for k in ("swell", "wind") if entry.get(k)]
-            detail = " · ".join(detail_bits)
-            if entry.get("why"):
-                detail = f"{detail} - {entry['why']}" if detail else str(entry["why"])
+            detail = _entry_detail(entry)
             rows.append(
                 f'<div class="week-row"><div class="week-day">{esc(day_label)}</div>'
                 f'<div class="week-chip">{chip}</div>'
@@ -625,6 +720,174 @@ def render(package: dict[str, Any]) -> str:
     )
 
 
+def _best_verdict(days: list[dict[str, Any]]) -> str:
+    """The strongest verdict across a spot's days (go > check > skip).
+
+    Used for the map popup so a spot reads by its best day of the week. An
+    empty or unknown-verdict day list falls back to skip.
+    """
+    order = {"go": 3, "check": 2, "skip": 1}
+    best = max((d.get("verdict", "skip") for d in days or []), key=lambda v: order.get(v, 0), default="skip")
+    return best if best in VERDICT_DISPLAY else "skip"
+
+
+def render_week(package: dict[str, Any]) -> str:
+    """Render the self-contained HTML week planner for a week data package.
+
+    Validates the week shape (mode == "week" with spots and ranking) and raises
+    ValueError otherwise so the CLI degrades to the soft-failure JSON. Reuses
+    the single-mode palette, chip styles, dark mode, and inlined Leaflet; adds
+    WEEK_CSS for the ranking rows and per-spot cards. Every value drawn from the
+    package is HTML-escaped; the only remote reference emitted is the OSM tile
+    URL template inside the inlined map init. Determinism is preserved: no
+    wall-clock reads, ranking order is emitted exactly as given.
+    """
+    if package.get("mode") != "week":
+        raise ValueError('week mode requires a package with "mode": "week"')
+    spots = package.get("spots")
+    ranking = package.get("ranking")
+    if not isinstance(spots, list) or ranking is None:
+        raise ValueError("week package must carry a spots list and a ranking list")
+
+    week = package.get("week") or {}
+    start = week.get("start", "")
+    end = week.get("end", "")
+
+    leaflet_css = _read_vendor("leaflet.css")
+    leaflet_js = _read_vendor("leaflet.js")
+
+    esc = html.escape
+
+    slug_to_name = {s.get("slug"): s.get("name", s.get("slug", "Spot")) for s in spots}
+
+    # --- Map hero -----------------------------------------------------------
+    spot_count = len(spots)
+    count_label = f"{spot_count} spot" + ("" if spot_count == 1 else "s")
+    hero = (
+        '<section class="hero hero-week"><div id="surf-map"></div>'
+        '<div class="overlay"><span class="chip chip-go">WEEK PLANNER</span>'
+        f'<p class="range">{esc(str(start))} to {esc(str(end))}</p>'
+        f'<p class="count">{esc(count_label)}</p></div></section>'
+    )
+
+    # --- Best windows this week (ranking, order preserved) ------------------
+    rank_rows = []
+    for i, entry in enumerate(ranking):
+        d = entry.get("date")
+        when = f"{_weekday(d, WEEKDAY_ABBR)} {esc(d)}" if d else "?"
+        spot_name = slug_to_name.get(entry.get("spot_slug"), entry.get("spot_slug", "Spot"))
+        window = entry.get("window") or {}
+        win_bits = []
+        if window.get("from") or window.get("to"):
+            win_bits.append(f'{esc(str(window.get("from", "?")))}-{esc(str(window.get("to", "?")))}')
+        if window.get("label"):
+            win_bits.append(esc(str(window["label"])))
+        win_text = " · ".join(win_bits)
+        chip = _verdict_chip(entry.get("verdict", "check"))
+        detail = esc(_swell_wind(entry))
+        why = f'<div class="rank-why">{esc(str(entry["why"]))}</div>' if entry.get("why") else ""
+        row_class = "rank-row rank-best" if i == 0 else "rank-row"
+        rank_rows.append(
+            f'<div class="{row_class}">'
+            f'<div class="rank-num">{i + 1}</div>'
+            f'<div class="rank-when">{when}</div>'
+            f'<div class="rank-spot">{esc(str(spot_name))}</div>'
+            f'<div class="day-chip">{chip}</div>'
+            f'<div class="rank-window">{win_text}</div>'
+            f'<div class="rank-detail">{detail}</div>'
+            f"{why}</div>"
+        )
+    if rank_rows:
+        ranking_body = "".join(rank_rows)
+    else:
+        ranking_body = '<p class="tide-note">No standout windows ranked this week.</p>'
+    ranking_section = (
+        '<section class="card"><h2>Best windows this week</h2>' + ranking_body + "</section>"
+    )
+
+    # --- Per-spot cards (package order) -------------------------------------
+    spot_sections = []
+    for spot in spots:
+        name = spot.get("name", spot.get("slug", "Spot"))
+        slug = spot.get("slug", "")
+        flags = []
+        if not spot.get("profiled"):
+            flags.append(f'<span class="flag">unprofiled - run /surfing:research {esc(str(slug))}</span>')
+        elif spot.get("reresearch_suggested"):
+            age = spot.get("profile_age_days")
+            age_text = f"profile is {age} days old, consider re-researching" if age is not None \
+                else "profile may be stale, consider re-researching"
+            flags.append(f'<span class="flag flag-soft">{esc(age_text)}</span>')
+        flags_html = "".join(flags)
+
+        source = spot.get("verdict_source")
+        source_html = f'<p class="spot-source">Verdicts from: {esc(str(source))}</p>' if source else ""
+
+        day_rows = []
+        for day in spot.get("days") or []:
+            d = day.get("date")
+            day_label = f"{_weekday(d, WEEKDAY_ABBR)} {date.fromisoformat(d).day}" if d else "?"
+            chip = _verdict_chip(day.get("verdict", "check"))
+            best_time = day.get("best_time")
+            time_html = f'<div class="day-time">{esc(str(best_time))}</div>' if best_time else '<div class="day-time"></div>'
+            detail = _entry_detail(day)
+            day_rows.append(
+                f'<div class="day-row"><div class="day-date">{esc(day_label)}</div>'
+                f'<div class="day-chip">{chip}</div>'
+                f"{time_html}"
+                f'<div class="day-detail">{esc(detail)}</div></div>'
+            )
+        spot_sections.append(
+            '<section class="card">'
+            f'<div class="spot-head"><h2>{esc(str(name))}</h2>{flags_html}</div>'
+            f"{source_html}{''.join(day_rows)}</section>"
+        )
+    spots_html = "\n".join(spot_sections)
+
+    # --- Footer (consistent with single mode) -------------------------------
+    footer = (
+        '<footer class="footer">'
+        "<p>AI-generated report. Verify conditions on-site; if in doubt, don't paddle out.</p>"
+        "</footer>"
+    )
+
+    # --- Map markers (one per spot, best-verdict popup) ---------------------
+    markers = []
+    for spot in spots:
+        coords = spot.get("coordinates") or [0.0, 0.0]
+        emoji, label = VERDICT_DISPLAY.get(_best_verdict(spot.get("days")), ("", ""))
+        # Popup strings are concatenated into HTML inside the inlined map JS, so
+        # escape them here. This also strips any '<' that could otherwise break
+        # out of the surrounding <script> tag from within the JSON literal.
+        markers.append({
+            "lat": float(coords[0]),
+            "lon": float(coords[1]),
+            "name": esc(str(spot.get("name", spot.get("slug", "Spot")))),
+            "best": esc(f"{emoji} {label}".strip()),
+        })
+    map_js = WEEK_MAP_JS.replace("__SPOTS__", json.dumps(markers))
+
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="en">\n<head>\n'
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"<title>Surf week planner {esc(str(start))} to {esc(str(end))}</title>\n"
+        f"<style>{leaflet_css}</style>\n"
+        f"<style>{PAGE_CSS}{WEEK_CSS}</style>\n"
+        "</head>\n<body>\n"
+        f"{hero}\n"
+        '<main class="wrap">\n'
+        f"{ranking_section}\n"
+        f"{spots_html}\n"
+        f"{footer}\n"
+        "</main>\n"
+        f"<script>{leaflet_js}</script>\n"
+        f"<script>{map_js}</script>\n"
+        "</body>\n</html>\n"
+    )
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -638,11 +901,18 @@ SOFT_FAIL_NOTE = (
 @click.command()
 @click.option("--data", default=None, help="Path to the run's data-package JSON (Phase 5A shape). Required.")
 @click.option(
+    "--mode",
+    type=click.Choice(["single", "week"]),
+    default="single",
+    help="single (default) renders one spot's report; week renders a multi-spot week planner.",
+)
+@click.option(
     "--out",
     default=None,
-    help="Override the output HTML path. Defaults to the verdict's Markdown report with a .html extension.",
+    help="Override the output HTML path. Defaults to the verdict's Markdown report (single) "
+    "or reports/{week.start}-week.html (week).",
 )
-def cli(data: str | None, out: str | None):
+def cli(data: str | None, mode: str, out: str | None):
     """Render a self-contained HTML surf report and print {"html_path": ...}."""
     # A missing --data is an invalid argument (exit 1), per the Tool Contract.
     if not data:
@@ -657,8 +927,12 @@ def cli(data: str | None, out: str | None):
         sys.exit(0)
 
     try:
-        out_path = out or html_output_path(package)
-        html_doc = render(package)
+        if mode == "week":
+            out_path = out or week_output_path(package)
+            html_doc = render_week(package)
+        else:
+            out_path = out or html_output_path(package)
+            html_doc = render(package)
     except (KeyError, TypeError, ValueError, OSError) as e:
         click.echo(json.dumps({"error": f"Cannot render report: {e}", "note": SOFT_FAIL_NOTE}))
         sys.exit(0)

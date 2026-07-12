@@ -650,6 +650,45 @@ Once the markdown report passes review, render the deterministic HTML companion:
      failure to the user and continue, do not block on it.
 4. Open the HTML for the user: `open {html_path}` on macOS, `xdg-open {html_path}` on Linux.
 
+#### Week Mode: The Multi-Spot Data Package
+
+`render_report.py` has a second mode, `--mode week`, that renders one multi-spot dashboard instead of a single spot report. Its producer is the `/surfing:week` command (`commands/week.md`), not this research workflow; that command sweeps the surfer's home spots, ranks the week, and assembles the package below. It is documented here because `render_report.py` consumes it, so the schema is a contract that both sides share, the same normative tone as Step 5A.
+
+The **week data package** MUST match this schema exactly:
+
+```json
+{
+  "mode": "week",
+  "units": {"system": "metric", "wave_height": "m", "tide_height": "m", "wind_speed": "km/h", "temperature": "°C"},
+  "week": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"},
+  "spots": [
+    {
+      "name": "Mundaka", "slug": "mundaka", "coordinates": [43.4093, -2.6819],
+      "profiled": true, "profile_age_days": 4, "reresearch_suggested": false,
+      "verdict_source": "works-on profile",
+      "days": [{"date": "YYYY-MM-DD", "verdict": "go|check|skip", "best_time": "HH:MM", "swell": "0.6 m @ 8 s NW", "wind": "12 km/h NE offshore", "why": "one-liner"}]
+    }
+  ],
+  "ranking": [
+    {"date": "YYYY-MM-DD", "spot_slug": "...", "window": {"from": "HH:MM", "to": "HH:MM", "label": "dawn, mid tide incoming"}, "verdict": "go|check|skip", "swell": "...", "wind": "...", "why": "..."}
+  ]
+}
+```
+
+- Verdicts are exactly `go`/`check`/`skip` (the Go / Worth a check / Skip vocabulary), never a raw quality score.
+- `spots[].days` is chronological; `ranking` is ordered best-first by the producing command, and the renderer preserves that order and never re-sorts.
+- An unprofiled spot carries `profiled: false`, `profile_age_days: null`, and `verdict_source: "quality score (spot-agnostic)"`.
+- `swell`/`wind`/`why` are display-ready strings with unit labels already applied (like Step 5A's `analysis.week` rows); JSON keys stay unit-neutral, the `units` object states the units in effect.
+- `best_time` is a display-ready local-time string: usually `"HH:MM"`, a range like `"06:07-11:00"` when the whole window reads better, or `null` when the day has no surfable window.
+
+Invocation, run from the surf folder like Step 6C:
+
+```bash
+uv run --project "{repo_root}/skills/spot-researcher/tools" python "{repo_root}/skills/spot-researcher/tools/render_report.py" --data {abs path to package.json} --mode week
+```
+
+The renderer writes `reports/{week.start}-week.html` relative to the surf folder; `--out` overrides the path. Exit-0 soft-failure contract as in Step 6C: on trouble it prints `{"error": ..., "note": ...}` and the markdown dashboard remains canonical.
+
 ### Phase 7: Spot Profile Update
 
 **Goal:** Persist what research learned, so future conditions checks skip re-research and correct verdicts to this break.

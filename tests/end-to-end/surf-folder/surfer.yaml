@@ -20,6 +20,7 @@ boards:
 home_spots:
   - mundaka
   - la-salvaje-sopelana
+  - zarautz
 
 units: metric
 target_days: [saturday, sunday]

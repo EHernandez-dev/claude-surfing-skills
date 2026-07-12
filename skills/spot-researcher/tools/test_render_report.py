@@ -9,6 +9,12 @@ Regenerate the golden file after an INTENTIONAL design change with:
       "import json, render_report; \
        print(render_report.render(json.load(open('testdata/data-package.json'))), end='')" \
       > testdata/golden-report.html
+
+Regenerate the week-planner golden file after an INTENTIONAL design change with:
+    cd skills/spot-researcher/tools && uv run python -c \
+      "import json, render_report; \
+       print(render_report.render_week(json.load(open('testdata/week-data-package.json'))), end='')" \
+      > testdata/golden-week-report.html
 """
 
 import json
@@ -27,18 +33,26 @@ from render_report import (
     html_output_path,
     parse_hhmm,
     render,
+    render_week,
     tide_height_at,
     tide_svg,
+    week_output_path,
 )
 
 TOOLS_DIR = Path(__file__).resolve().parent
 TESTDATA = TOOLS_DIR / "testdata"
 PACKAGE_PATH = TESTDATA / "data-package.json"
 GOLDEN_PATH = TESTDATA / "golden-report.html"
+WEEK_PACKAGE_PATH = TESTDATA / "week-data-package.json"
+WEEK_GOLDEN_PATH = TESTDATA / "golden-week-report.html"
 
 
 def load_package() -> dict:
     return json.loads(PACKAGE_PATH.read_text(encoding="utf-8"))
+
+
+def load_week_package() -> dict:
+    return json.loads(WEEK_PACKAGE_PATH.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -430,6 +444,190 @@ class TestCli:
 
 
 # ---------------------------------------------------------------------------
+# Week planner (--mode week)
+# ---------------------------------------------------------------------------
+
+
+class TestWeekOutputPath:
+    def test_default_path_from_week_start(self):
+        assert week_output_path(load_week_package()) == "reports/2026-07-12-week.html"
+
+    def test_missing_week_start_raises(self):
+        with pytest.raises((KeyError, TypeError)):
+            week_output_path({"mode": "week", "week": {}})
+
+
+class TestRenderWeek:
+    def test_all_spot_names_present(self):
+        out = render_week(load_week_package())
+        assert "Mundaka" in out
+        assert "La Salvaje (Sopelana)" in out
+        assert "Zarautz" in out
+
+    def test_header_shows_range_and_spot_count(self):
+        out = render_week(load_week_package())
+        assert "2026-07-12" in out
+        assert "2026-07-18" in out
+        assert "3 spots" in out
+
+    def test_verdict_chips_present(self):
+        out = render_week(load_week_package())
+        assert "chip-go" in out
+        assert "chip-check" in out
+        assert "chip-skip" in out
+        assert "GO" in out and "WORTH A CHECK" in out and "SKIP" in out
+
+    def test_unprofiled_flag_exact_text(self):
+        out = render_week(load_week_package())
+        assert "unprofiled - run /surfing:research zarautz" in out
+
+    def test_verdict_source_shown(self):
+        out = render_week(load_week_package())
+        assert "works-on profile" in out
+        assert "quality score (spot-agnostic)" in out
+
+    def test_reresearch_chip_only_when_suggested(self):
+        pkg = load_week_package()
+        # No spot in the fixture suggests re-research, so no age chip appears.
+        assert "consider re-researching" not in render_week(pkg)
+        pkg["spots"][0]["reresearch_suggested"] = True
+        pkg["spots"][0]["profile_age_days"] = 40
+        out = render_week(pkg)
+        assert "consider re-researching" in out
+        assert "40" in out
+
+    def test_ranking_order_preserved(self):
+        out = render_week(load_week_package())
+        # The fixture ranking is best-first: La Salvaje Thu, La Salvaje Wed,
+        # Mundaka Thu, Zarautz Fri. Their why-strings must appear in that order.
+        whys = [
+            "Clean long-period NW at dawn before the sea breeze fills in",
+            "Chest-high on the banks with SE offshore, best near the high",
+            "First pulse over the rivermouth minimum, offshore on the push",
+            "Fun size early before the cross-shore wind, decent quality score",
+        ]
+        positions = [out.index(w) for w in whys]
+        assert positions == sorted(positions)
+
+    def test_best_window_emphasized(self):
+        out = render_week(load_week_package())
+        assert "rank-best" in out
+
+    def test_weekday_labels_from_dates(self):
+        out = render_week(load_week_package())
+        # 2026-07-16 is a Thursday (the best window's day).
+        assert "Thu" in out
+
+    def test_hostile_spot_name_escaped(self):
+        pkg = load_week_package()
+        pkg["spots"][0]["name"] = "<script>alert(1)</script>"
+        out = render_week(pkg)
+        assert "<script>alert(1)</script>" not in out
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in out
+
+    def test_both_color_schemes_present(self):
+        out = render_week(load_week_package())
+        assert "--page: #eef1f4" in out
+        assert "prefers-color-scheme: dark" in out
+        assert "--page: #0d1520" in out
+
+    def test_leaflet_inlined_and_no_external_tags(self):
+        out = render_week(load_week_package())
+        assert "Leaflet 1.9.4" in out
+        assert "<script src=" not in out
+        assert "<link " not in out
+
+    def test_deterministic_across_calls(self):
+        pkg = load_week_package()
+        assert render_week(pkg) == render_week(pkg)
+
+    def test_wrong_mode_raises(self):
+        pkg = load_week_package()
+        pkg["mode"] = "single"
+        with pytest.raises((KeyError, ValueError)):
+            render_week(pkg)
+
+    def test_missing_spots_raises(self):
+        pkg = load_week_package()
+        del pkg["spots"]
+        with pytest.raises((KeyError, ValueError)):
+            render_week(pkg)
+
+    def test_missing_ranking_raises(self):
+        pkg = load_week_package()
+        del pkg["ranking"]
+        with pytest.raises((KeyError, ValueError)):
+            render_week(pkg)
+
+
+class TestWeekCli:
+    def test_writes_default_path_and_prints_json(self, tmp_path):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "render_report.py"),
+             "--mode", "week", "--data", str(WEEK_PACKAGE_PATH)],
+            cwd=tmp_path, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["html_path"] == "reports/2026-07-12-week.html"
+        written = tmp_path / "reports" / "2026-07-12-week.html"
+        assert written.is_file()
+        assert "<!DOCTYPE html>" in written.read_text(encoding="utf-8")
+
+    def test_out_override(self, tmp_path):
+        out = tmp_path / "custom" / "week.html"
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "render_report.py"),
+             "--mode", "week", "--data", str(WEEK_PACKAGE_PATH), "--out", str(out)],
+            cwd=tmp_path, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["html_path"] == str(out)
+        assert out.is_file()
+
+    def test_single_mode_default_unchanged(self, tmp_path):
+        # --mode single (the default) must still write the single-report path.
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "render_report.py"),
+             "--mode", "single", "--data", str(PACKAGE_PATH)],
+            cwd=tmp_path, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["html_path"] == "reports/2026-07-11-mundaka-go.html"
+
+    def test_week_package_missing_fields_soft_fails_exit_0(self, tmp_path):
+        pkg = load_week_package()
+        del pkg["ranking"]
+        p = tmp_path / "pkg.json"
+        p.write_text(json.dumps(pkg))
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "render_report.py"),
+             "--mode", "week", "--data", str(p)],
+            cwd=tmp_path, capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        payload = json.loads(result.stdout)
+        assert "error" in payload and "note" in payload
+
+    def test_single_mode_on_week_package_soft_fails_exit_0(self, tmp_path):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "render_report.py"),
+             "--mode", "single", "--data", str(WEEK_PACKAGE_PATH)],
+            cwd=tmp_path, capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "error" in json.loads(result.stdout)
+
+    def test_invalid_mode_exits_1(self, tmp_path):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "render_report.py"),
+             "--mode", "fortnight", "--data", str(WEEK_PACKAGE_PATH)],
+            cwd=tmp_path, capture_output=True, text=True,
+        )
+        assert result.returncode != 0
+
+
+# ---------------------------------------------------------------------------
 # Golden file
 # ---------------------------------------------------------------------------
 
@@ -437,3 +635,6 @@ class TestCli:
 class TestGolden:
     def test_matches_golden(self):
         assert render(load_package()) == GOLDEN_PATH.read_text(encoding="utf-8")
+
+    def test_week_matches_golden(self):
+        assert render_week(load_week_package()) == WEEK_GOLDEN_PATH.read_text(encoding="utf-8")

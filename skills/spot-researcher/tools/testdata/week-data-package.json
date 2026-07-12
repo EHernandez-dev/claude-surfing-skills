@@ -1,0 +1,73 @@
+{
+  "mode": "week",
+  "units": {
+    "system": "metric",
+    "wave_height": "m",
+    "tide_height": "m",
+    "wind_speed": "km/h",
+    "temperature": "°C"
+  },
+  "week": {"start": "2026-07-12", "end": "2026-07-18"},
+  "spots": [
+    {
+      "name": "Mundaka",
+      "slug": "mundaka",
+      "coordinates": [43.4095, -2.6995],
+      "profiled": true,
+      "profile_age_days": 4,
+      "reresearch_suggested": false,
+      "verdict_source": "works-on profile",
+      "days": [
+        {"date": "2026-07-12", "verdict": "skip", "best_time": "08:00", "swell": "0.6 m @ 8 s NW", "wind": "12 km/h NE cross-shore", "why": "Under the 1 m minimum the rivermouth needs to break"},
+        {"date": "2026-07-13", "verdict": "skip", "best_time": "08:30", "swell": "0.5 m @ 8 s NW", "wind": "10 km/h N onshore", "why": "Flat summer background swell, nothing to work with"},
+        {"date": "2026-07-14", "verdict": "skip", "best_time": "09:00", "swell": "0.7 m @ 9 s NW", "wind": "18 km/h NW onshore", "why": "Small and onshore, the sandbar will not organize"},
+        {"date": "2026-07-15", "verdict": "check", "best_time": "07:30", "swell": "0.9 m @ 10 s NW", "wind": "9 km/h S offshore", "why": "Borderline for the bar but offshore at dawn, worth a look on the low push"},
+        {"date": "2026-07-16", "verdict": "check", "best_time": "07:00", "swell": "1.2 m @ 12 s NW", "wind": "8 km/h S offshore", "why": "First pulse over the 1 m minimum, light offshore on the low-to-mid push"},
+        {"date": "2026-07-17", "verdict": "skip", "best_time": "07:30", "swell": "0.8 m @ 10 s NW", "wind": "14 km/h W cross-shore", "why": "Dropping back under threshold and going cross-shore"},
+        {"date": "2026-07-18", "verdict": "skip", "best_time": "08:00", "swell": "0.6 m @ 9 s NW", "wind": "16 km/h NW onshore", "why": "Back to summer flatness, onshore by mid-morning"}
+      ]
+    },
+    {
+      "name": "La Salvaje (Sopelana)",
+      "slug": "la-salvaje-sopelana",
+      "coordinates": [43.3905, -3.0015],
+      "profiled": true,
+      "profile_age_days": 4,
+      "reresearch_suggested": false,
+      "verdict_source": "works-on profile",
+      "days": [
+        {"date": "2026-07-12", "verdict": "check", "best_time": "08:30", "swell": "0.7 m @ 8 s NW", "wind": "11 km/h SE offshore", "why": "Small but clean on the learner banks near the high, fun for a longboard"},
+        {"date": "2026-07-13", "verdict": "check", "best_time": "09:00", "swell": "0.6 m @ 9 s NW", "wind": "9 km/h S offshore", "why": "Marginal size but offshore, the mid-beach A-frames will still be rideable"},
+        {"date": "2026-07-14", "verdict": "skip", "best_time": "09:30", "swell": "0.5 m @ 7 s W", "wind": "20 km/h NW onshore", "why": "Short-period windswell blown out by the sea breeze"},
+        {"date": "2026-07-15", "verdict": "go", "best_time": "08:00", "swell": "1.0 m @ 11 s NW", "wind": "8 km/h SE offshore", "why": "Clean chest-high NW on the banks with SE offshore, best near the high"},
+        {"date": "2026-07-16", "verdict": "go", "best_time": "07:30", "swell": "1.4 m @ 12 s NW", "wind": "9 km/h S offshore", "why": "Long-period NW at dawn on the mid tide incoming before the sea breeze fills in"},
+        {"date": "2026-07-17", "verdict": "check", "best_time": "08:00", "swell": "1.1 m @ 11 s NW", "wind": "13 km/h W cross-shore", "why": "Still fun size early but going cross-shore by mid-morning"},
+        {"date": "2026-07-18", "verdict": "check", "best_time": "08:30", "swell": "0.9 m @ 10 s NW", "wind": "12 km/h NW cross-shore", "why": "Dropping but the banks hold a small wave near the high"}
+      ]
+    },
+    {
+      "name": "Zarautz",
+      "slug": "zarautz",
+      "coordinates": [43.2871, -2.1698],
+      "profiled": false,
+      "profile_age_days": null,
+      "reresearch_suggested": false,
+      "verdict_source": "quality score (spot-agnostic)",
+      "days": [
+        {"date": "2026-07-12", "verdict": "skip", "best_time": "08:00", "swell": "0.7 m @ 8 s NW", "wind": "13 km/h N onshore", "why": "Small and onshore, low spot-agnostic quality score"},
+        {"date": "2026-07-13", "verdict": "check", "best_time": "08:30", "swell": "0.8 m @ 9 s NW", "wind": "9 km/h S offshore", "why": "Modest swell but offshore early lifts the quality score to a maybe"},
+        {"date": "2026-07-14", "verdict": "skip", "best_time": "09:00", "swell": "0.6 m @ 7 s W", "wind": "19 km/h NW onshore", "why": "Windswell and onshore, poor score"},
+        {"date": "2026-07-15", "verdict": "check", "best_time": "08:00", "swell": "1.0 m @ 11 s NW", "wind": "10 km/h S offshore", "why": "Decent size and offshore, a solid spot-agnostic score"},
+        {"date": "2026-07-16", "verdict": "check", "best_time": "07:30", "swell": "1.3 m @ 12 s NW", "wind": "11 km/h S offshore", "why": "Good long-period swell and offshore, strong score but the profile is a guess"},
+        {"date": "2026-07-17", "verdict": "check", "best_time": "08:00", "swell": "1.0 m @ 11 s NW", "wind": "12 km/h W cross-shore", "why": "Fun size early before the cross-shore wind, moderate score"},
+        {"date": "2026-07-18", "verdict": "skip", "best_time": "08:30", "swell": "0.8 m @ 10 s NW", "wind": "15 km/h NW onshore", "why": "Dropping and onshore, weak score"}
+      ]
+    }
+  ],
+  "ranking": [
+    {"date": "2026-07-16", "spot_slug": "la-salvaje-sopelana", "window": {"from": "07:30", "to": "09:30", "label": "dawn, mid tide incoming"}, "verdict": "go", "swell": "1.4 m @ 12 s NW", "wind": "9 km/h S offshore", "why": "Clean long-period NW at dawn before the sea breeze fills in"},
+    {"date": "2026-07-15", "spot_slug": "la-salvaje-sopelana", "window": {"from": "08:00", "to": "10:00", "label": "morning, near high"}, "verdict": "go", "swell": "1.0 m @ 11 s NW", "wind": "8 km/h SE offshore", "why": "Chest-high on the banks with SE offshore, best near the high"},
+    {"date": "2026-07-16", "spot_slug": "mundaka", "window": {"from": "07:00", "to": "09:00", "label": "dawn, low-to-mid push"}, "verdict": "check", "swell": "1.2 m @ 12 s NW", "wind": "8 km/h S offshore", "why": "First pulse over the rivermouth minimum, offshore on the push"},
+    {"date": "2026-07-17", "spot_slug": "zarautz", "window": {"from": "07:30", "to": "09:30", "label": "dawn glass-off"}, "verdict": "check", "swell": "1.0 m @ 11 s NW", "wind": "12 km/h W cross-shore", "why": "Fun size early before the cross-shore wind, decent quality score"}
+  ]
+}
