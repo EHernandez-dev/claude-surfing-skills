@@ -145,6 +145,8 @@ Python dependencies install automatically if `uv` is available. No restart neede
 | `/surfing:research <spot>` | Full surf spot research report | 3-5 min |
 | `/surfing:conditions <spot>` | Swell, wind, tides, buoy observation, wetsuit call | ~30 sec |
 | `/surfing:windows <spot>` | Best session windows for this week | ~30 sec |
+| `/surfing:week [spots]` | Ranked dashboard of the week's best windows across your home spots | ~1 min |
+| `/surfing:briefing [--alert]` | Tomorrow's compact call across home spots; `--alert` fires only on a works-on match | ~30 sec |
 
 ### Natural Language
 
