@@ -68,4 +68,17 @@ webcams:
 
 notes: Tide-windowed (~2 h around low-to-mid). Summer is mostly flat; it is an autumn/winter wave.
 
+# model_bias (optional): the verification loop's learned correction, written by
+# /surfing:verify from session logs vs archived forecasts and applied by
+# fetch_conditions.py --spot-file to future forecasts (conditions, week,
+# briefing). Stored in metric: swell_height_m and swell_period_s are
+# observed - forecast, so a positive value means the model under-calls and the
+# offset is added to the forecast. Omit the block until a verify run fills it in.
+# model_bias:
+#   swell_height_m: 0.3      # + = model under-calls size here, corrected up by 0.3 m
+#   swell_period_s: 0.0      # optional; omit or 0 for no period correction
+#   samples: 3               # session logs the bias was computed from
+#   last_verified: 2026-07-12
+#   note: model under-calls size by ~0.3 m
+
 last_researched: 2026-07-08

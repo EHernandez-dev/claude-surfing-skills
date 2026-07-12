@@ -45,8 +45,11 @@ Profiled spot:
 ```bash
 cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python fetch_conditions.py \
   --spot-file "{absolute path to spots/<slug>.yaml}" \
+  --archive "{absolute path to the surf folder}/forecasts" \
   --days 7
 ```
+
+Add `--archive "{absolute path to the surf folder}/forecasts"` to every profiled fetch: it appends each spot's forecast snapshot to `forecasts/<slug>.jsonl`, building the archive `/surfing:verify` learns from. Unprofiled spots may skip it (no profile to store a bias in yet).
 
 Unprofiled spot:
 
@@ -69,6 +72,7 @@ Turn each spot's forecast into per-day verdicts (Go, Worth a check, Skip). Never
 **Profiled spots** are corrected to their own works-on profile, exactly as SKILL.md Step 4B lays out (do not restate it here, apply it): judge each day's swell direction against the profile's swell window, its size against the working range and ceiling, its period against the minimum, and shift the recommended session time toward the profile's ideal tide; cross-check today against the pinned buoy observation and flag disagreement. A generically "good" day from outside the swell window, under the minimum period, or over the size ceiling is a Skip, and the reasoning says why. Mention a `hazards`/`notes` one-liner when it changes the call.
 
 - **State each profile's age** from the payload's `spot.profile` (e.g. "mundaka.yaml, researched 2026-07-08, 4 days old"). If `reresearch_suggested` is true (older than ~6 months), suggest a refresh with `/surfing:research <spot>`; the profile never expires, so still use it. If `last_researched` is null (hand-created profile), say the age is unknown and suggest a research run.
+- **Note any applied model bias:** when a spot's payload carries a `bias` block (a stored `model_bias` from `/surfing:verify`), its swell numbers are already bias-corrected; note it for that spot using `bias.note` (e.g. "sizes bias-corrected: model under-calls ~0.3 m here") so the correction is visible in the dashboard reasoning.
 - **Personalize when `surfer.yaml` exists:** weigh each verdict against the surfer's skill level and comfort zone, name the fitting board from their quiver on Go / Worth-a-check days, and prefer their target days when the week is close.
 
 **Unprofiled spots** have no works-on profile to correct against, so map the spot-agnostic quality straight to verdicts and label them honestly: the score knows period, size, and wind only, not this break's swell window, ideal tide, or size ceiling. These verdicts are a first-pass estimate, flagged as such in the dashboard.

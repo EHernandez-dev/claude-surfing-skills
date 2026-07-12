@@ -94,6 +94,7 @@ uv run python fetch_conditions.py \
 - `--units` (optional): `metric` (heights m, wind km/h, temps °C) or `imperial` (heights ft, wind kn, temps °F). Precedence: this flag, then the surfer profile, then metric. All quantities are SI internally; conversion happens only at the output edge
 - `--target-day` (optional): The day (YYYY-MM-DD) the surfer intends to surf; keys `report.target_date`. Defaults to the forecast window's first day, never the run date
 - `--tide-station` (optional): NOAA CO-OPS station ID override, skips the nearest-station lookup
+- `--archive` (optional): Directory (the surf folder's `forecasts/`) to append one JSONL forecast snapshot per day to, as `forecasts/<slug>.jsonl`. Append-only machine data, the forecast side of the verification loop (`verify_forecast.py` / `/surfing:verify`). When `--spot-file` carries a `model_bias`, the snapshot records the already bias-corrected numbers
 
 **Environment:**
 
@@ -113,6 +114,8 @@ Returns unified JSON with these keys. All keys are unit-neutral; the `units` obj
 - `daylight`: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours`
 - `weather`: per-day `conditions`, `icon`, `temp_max`/`temp_min`, `precip_probability_pct`, `uv_index_max`
 - `surf_windows`: best-rated surfable-light block per day (`best_time` is clamped to first light so it never lands in the dark), only present when `--facing` was provided
+- `bias`: only when `--spot-file` carries a `model_bias`; the applied per-spot correction from `/surfing:verify` (`applied`, `swell_height` in display units, `swell_period_s`, `samples`, `last_verified`, `note`, `source`). The offset is folded into the marine heights/periods, quality, and surf windows before output
+- `archive`: only when `--archive` snapshotted a forecast; `path` to `forecasts/<slug>.jsonl` and the `appended` line count
 - `gaps`: any API failures or skipped computations
 
 **Data Sources:**
@@ -131,6 +134,39 @@ uv run pytest -v
 
 # Integration tests hit live APIs
 RUN_INTEGRATION_TESTS=1 uv run pytest -v
+```
+
+---
+
+### verify_forecast.py
+
+The forecast verification arithmetic: compares a surfer's observed sessions against the archived forecast snapshots for the same days and reduces the differences to a per-spot model bias. Pure computation, no network. Driven by `/surfing:verify`, which extracts the observed numbers from the freeform session logs and writes the returned bias into the spot profile's `model_bias` block.
+
+**Usage:**
+
+```bash
+uv run python verify_forecast.py \
+  --forecast-log "/abs/path/to/forecasts/mundaka.jsonl" \
+  --observations '[{"date":"2026-07-12","swell_height":1.4,"swell_period_s":13}]'
+```
+
+**Parameters:**
+
+- `--forecast-log` (required): Path to the spot's forecast archive (`forecasts/<slug>.jsonl`, built by `fetch_conditions.py --archive`)
+- `--observations` (required unless `--observations-file`): Observed sessions as a JSON array, `{date, swell_height, swell_period_s?}`, in the **same units as the forecast log**
+- `--observations-file` (optional): Path to a JSON file with the observations array (alternative to `--observations`)
+- `--spot-slug` (optional): Slug echoed in the result; defaults to the log's `spot_slug`
+
+**Output:**
+
+JSON with `samples` (session/forecast pairs matched, freshest forecast per day), `bias` (`swell_height_m` in meters and `swell_period_s` in seconds, each `observed - forecast`, or null), a human `note` (e.g. "model under-calls size by ~0.3 m"), `unmatched_sessions`, per-session `matched` detail, and the log's `units`. Sign convention matches the profile: a positive bias means the model under-calls and the offset is added to future forecasts. Small biases (within ~0.1 m) are zeroed so noise does not manufacture a correction.
+
+**Contract:** a data problem (unreadable log, no overlapping days) exits 0 with a result or an `error`/`note`; exit 1 is reserved for invalid CLI arguments (missing log or observations, malformed observations JSON).
+
+**Testing:**
+
+```bash
+uv run pytest -v test_verify_forecast.py
 ```
 
 ---

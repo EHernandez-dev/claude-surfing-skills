@@ -899,6 +899,115 @@ class TestCliReportNaming:
         assert "error" in json.loads(result.output)
 
 
+class TestCliArchive:
+    """The forecast side of the verification loop: --archive appends one JSONL
+    snapshot per forecast day per spot to forecasts/<slug>.jsonl."""
+
+    def test_appends_one_line_per_forecast_day(self, patched_fetchers, tmp_path):
+        data = run_cli("--archive", str(tmp_path))
+        path = tmp_path / "mundaka.jsonl"
+        assert path.exists()
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1  # MARINE_RAW carries a single forecast day
+        record = json.loads(lines[0])
+        assert record["date"] == "2026-07-10"
+        assert record["spot_slug"] == "mundaka"
+        assert record["swell_height"] == 1.1  # summary swell_height_max, display units
+        assert record["swell_period_s"] == 13.0
+        assert record["swell_direction"] == "WNW"  # 302 deg dominant
+        assert record["units"]["system"] == "metric"
+        assert record["archived_on"], "snapshot must be stamped with the run date"
+        assert "best_window" in record, "facing 315 yields a surf window to snapshot"
+        assert data["archive"]["appended"] == 1
+        assert data["archive"]["path"].endswith("mundaka.jsonl")
+
+    def test_append_only_accumulates(self, patched_fetchers, tmp_path):
+        run_cli("--archive", str(tmp_path))
+        run_cli("--archive", str(tmp_path))
+        lines = (tmp_path / "mundaka.jsonl").read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2, "the archive is append-only, never overwritten"
+
+    def test_creates_archive_directory(self, patched_fetchers, tmp_path):
+        target = tmp_path / "forecasts"
+        run_cli("--archive", str(target))
+        assert (target / "mundaka.jsonl").exists()
+
+    def test_no_forecast_records_gap_and_writes_nothing(self, monkeypatch, tmp_path):
+        error = {"error": "down", "note": "check manually"}
+        for name in ("fetch_marine", "fetch_wind_weather", "fetch_buoy", "fetch_tides", "fetch_daylight"):
+            monkeypatch.setattr(fetch_conditions, name, lambda *a, **k: error)
+        data = run_cli("--archive", str(tmp_path))
+        assert list(tmp_path.iterdir()) == [], "no forecast window means no snapshot"
+        assert any("archive" in g for g in data["gaps"])
+
+
+class TestCliModelBias:
+    """conditions/week/briefing apply a spot's stored model bias: --spot-file
+    with a model_bias block offsets the swell numbers before quality/windows and
+    echoes what it applied under `bias` (heights in the payload's display units)."""
+
+    BIAS_BLOCK = (
+        "model_bias:\n"
+        "  swell_height_m: 0.5\n"
+        "  swell_period_s: 1.0\n"
+        "  samples: 3\n"
+        "  last_verified: 2026-07-12\n"
+        "  note: model under-calls size by ~0.5 m\n"
+    )
+
+    @pytest.fixture
+    def pinned_buoy_ok(self, monkeypatch):
+        monkeypatch.setattr(fetch_conditions, "fetch_buoy_pinned", lambda cfg: BUOY_SI)
+
+    def _spot_with_bias(self, tmp_path, block=None):
+        path = tmp_path / "mundaka.yaml"
+        path.write_text(SPOT_PROFILE_YAML + (block if block is not None else self.BIAS_BLOCK))
+        return str(path)
+
+    def test_bias_offsets_swell_and_echoes_applied(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        data = json.loads(invoke_cli("--spot-file", self._spot_with_bias(tmp_path)).output)
+        block = data["marine"]["days"][0]["blocks"][0]
+        assert block["swell_height"] == 1.4  # 0.9 m + 0.5 m
+        assert block["swell_period_s"] == 13.0  # 12.0 s + 1.0 s
+        assert data["marine"]["days"][0]["summary"]["swell_height_max"] == 1.6  # 1.1 + 0.5
+        bias = data["bias"]
+        assert bias["applied"] is True
+        assert bias["swell_height"] == 0.5  # metric echo of the stored offset
+        assert bias["swell_period_s"] == 1.0
+        assert bias["samples"] == 3
+        assert "under-calls" in bias["note"]
+
+    def test_bias_echo_in_display_units(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        data = json.loads(invoke_cli("--spot-file", self._spot_with_bias(tmp_path), "--units", "imperial").output)
+        assert data["marine"]["days"][0]["blocks"][0]["swell_height"] == 4.6  # 1.4 m -> ft
+        assert data["bias"]["swell_height"] == 1.6  # 0.5 m -> ft
+
+    def test_no_bias_block_leaves_numbers_untouched(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        path = tmp_path / "mundaka.yaml"
+        path.write_text(SPOT_PROFILE_YAML)
+        data = json.loads(invoke_cli("--spot-file", str(path)).output)
+        assert data["marine"]["days"][0]["blocks"][0]["swell_height"] == 0.9
+        assert "bias" not in data
+
+    def test_negative_bias_floors_at_zero(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        path = self._spot_with_bias(tmp_path, block="model_bias:\n  swell_height_m: -2.0\n")
+        data = json.loads(invoke_cli("--spot-file", path).output)
+        assert data["marine"]["days"][0]["blocks"][0]["swell_height"] == 0.0
+
+    def test_archive_snapshots_raw_forecast_not_biased(self, patched_fetchers, pinned_buoy_ok, tmp_path):
+        # The loop must not un-learn itself: with a bias applied, the payload is
+        # corrected but the archived snapshot keeps the RAW model forecast, so a
+        # later /surfing:verify judges the model's own prediction.
+        archive_dir = tmp_path / "forecasts"
+        data = json.loads(
+            invoke_cli("--spot-file", self._spot_with_bias(tmp_path), "--archive", str(archive_dir)).output
+        )
+        assert data["marine"]["days"][0]["summary"]["swell_height_max"] == 1.6  # bias-corrected view
+        line = json.loads((archive_dir / "mundaka.jsonl").read_text(encoding="utf-8").splitlines()[0])
+        assert line["swell_height"] == 1.1  # raw summary (1.1), never the biased 1.6
+        assert line["swell_period_s"] == 13.0  # raw period, not 14.0
+
+
 class TestCliValidation:
     def test_invalid_coordinates_exit_1(self):
         runner = CliRunner()

@@ -38,8 +38,11 @@ One `fetch_conditions.py` run per spot, **all Bash calls issued in a single mess
 cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python fetch_conditions.py \
   --spot-file "{absolute path to spots/<slug>.yaml}" \
   --surfer-file "{absolute path to surfer.yaml}" \
+  --archive "{absolute path to the surf folder}/forecasts" \
   --days 5
 ```
+
+Keep `--archive "{absolute path to the surf folder}/forecasts"` on every profiled fetch, exactly as `week.md` Phase 2: an unattended morning briefing is the natural place to accumulate the forecast archive `/surfing:verify` learns from.
 
 Alert mode fetches only the profiled spots (unprofiled ones were dropped in Phase 0).
 
@@ -47,7 +50,7 @@ A spot that fails does not block the run: `fetch_conditions.py` exits 0 with an 
 
 ## Phase 3: Per-Spot Verdicts & Threshold Check
 
-Correct each profiled spot's forecast to its own `works_on` profile exactly as `week.md` Phase 3 (SKILL.md Step 4B): judge swell direction against the swell window, size against the working range and ceiling, period against the minimum, shift the session time toward the ideal tide, and cross-check today against the pinned buoy. Personalize when `surfer.yaml` exists (skill level, comfort zone, the fitting board from the quiver, target days, scheduling notes such as "weekday sessions out by 09:00"). Unprofiled spots get the spot-agnostic quality score only, flagged.
+Correct each profiled spot's forecast to its own `works_on` profile exactly as `week.md` Phase 3 (SKILL.md Step 4B): judge swell direction against the swell window, size against the working range and ceiling, period against the minimum, shift the session time toward the ideal tide, and cross-check today against the pinned buoy. Personalize when `surfer.yaml` exists (skill level, comfort zone, the fitting board from the quiver, target days, scheduling notes such as "weekday sessions out by 09:00"). Unprofiled spots get the spot-agnostic quality score only, flagged. When a spot's payload carries a `bias` block (a stored `model_bias` from `/surfing:verify`), its swell numbers are already bias-corrected; note it in that spot's row with `bias.note`.
 
 Then evaluate the **swell-alert trigger** (Phase 4B) for each profiled spot over the 5-day window. Both modes need this: the default briefing shows the result as a one-line footer, and alert mode shows only this.
 

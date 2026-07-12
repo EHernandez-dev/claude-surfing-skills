@@ -21,14 +21,16 @@ Before any web lookup, check the working directory (the surf folder):
 ```bash
 cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python fetch_conditions.py \
   --spot-file "{absolute path to spots/<slug>.yaml}" \
+  --archive "{absolute path to the surf folder}/forecasts" \
   --days 7
 ```
 
-Add `--surfer-file "{absolute path to surfer.yaml}"` when it exists. Paths must be absolute: the `cd` moves out of the surf folder.
+Add `--surfer-file "{absolute path to surfer.yaml}"` when it exists. Paths must be absolute: the `cd` moves out of the surf folder. `--archive` appends today's forecast snapshot to `forecasts/<slug>.jsonl`, feeding the verification loop (`/surfing:verify`); it is a harmless side effect of a normal check.
 
-Then present results per Phase 4, with three profile-specific additions:
+Then present results per Phase 4, with these profile-specific additions:
 
 - **Always state the profile's age first**, from the payload's `spot.profile` (e.g. "Using spot profile `spots/mundaka.yaml`, researched 2026-07-08, 2 days old"). If `reresearch_suggested` is true (older than ~6 months), suggest re-running `/surfing:research {spot}`; the profile never expires, so still use it. If `last_researched` is null (hand-created profile), say the profile's age is unknown and suggest a research run to fill it in.
+- **Note any applied model bias:** when the payload carries a `bias` block (the spot has a stored `model_bias` from `/surfing:verify`), the swell height and period numbers are already bias-corrected. Say so plainly using `bias.note` (e.g. "sizes are bias-corrected: the model under-calls ~0.3 m at this spot, over 3 sessions") so the correction is visible, not silent.
 - **Correct verdicts to the works-on profile:** judge each day against the profile's `works_on` (swell direction window, size range, minimum period, wind, tide), not the generic quality score alone. A "good" score from outside the swell window or under the minimum period is a Skip, and the reasoning must say why. Mention relevant `hazards`/`notes` one-liners when they affect the call.
 - **Personalize when `surfer.yaml` exists:** end with a bottom line for this surfer - verdict weighed against their skill level and comfort zone, and the board from their quiver that fits (a small clean day can be a Go for a beginner; a day past their comfort zone is a Skip for them).
 

@@ -382,6 +382,86 @@ def wetsuit_for(water_temp_c: float | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Per-spot model bias (the verification loop, /surfing:verify)
+# ---------------------------------------------------------------------------
+
+# Marine series adjusted by a stored model bias. Heights take the height bias,
+# swell period takes the period bias; wind-wave height and SST are left alone
+# (the bias describes how the model misses ground-swell size at this break).
+_BIAS_HEIGHT_KEYS = {"hourly": ("wave_height", "swell_wave_height"),
+                     "daily": ("wave_height_max", "swell_wave_height_max")}
+_BIAS_PERIOD_KEYS = {"hourly": ("swell_wave_period",),
+                     "daily": ("swell_wave_period_max",)}
+
+
+def parse_model_bias(profile: dict[str, Any]) -> dict[str, Any] | None:
+    """The spot profile's stored model bias, coerced to a numeric offset.
+
+    `model_bias` is written by /surfing:verify from session logs vs archived
+    forecasts and stored in metric (meters, seconds): `swell_height_m` and the
+    optional `swell_period_s` are `observed - forecast`, so a positive value
+    means the model under-calls and the offset is added to future forecasts.
+    Returns None when the profile carries no `model_bias` mapping.
+    """
+    cfg = profile.get("model_bias")
+    if not isinstance(cfg, dict):
+        return None
+
+    def num(key: str) -> float:
+        try:
+            value = cfg.get(key)
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    last_verified = cfg.get("last_verified")
+    if isinstance(last_verified, datetime):
+        last_verified = last_verified.date().isoformat()
+    elif isinstance(last_verified, date):
+        last_verified = last_verified.isoformat()
+    return {
+        "swell_height_m": num("swell_height_m"),
+        "swell_period_s": num("swell_period_s"),
+        "samples": cfg.get("samples"),
+        "last_verified": last_verified,
+        "note": cfg.get("note"),
+    }
+
+
+def _offset_series(series: list[Any], delta: float) -> list[Any]:
+    """Add `delta` to each numeric entry, flooring at 0 (no negative wave/period)."""
+    return [None if v is None else round(max(0.0, v + delta), 3) for v in series]
+
+
+def apply_swell_bias(
+    marine_raw: dict[str, Any], height_bias_m: float, period_bias_s: float
+) -> dict[str, Any]:
+    """Return marine data with swell/wave heights and swell period offset by the
+    stored bias (SI meters/seconds), so the biased numbers flow into the block
+    quality, surf windows, and the report before any unit conversion. A no-op on
+    a marine error payload or when both offsets are zero.
+    """
+    if "error" in marine_raw or (not height_bias_m and not period_bias_s):
+        return marine_raw
+    adjusted = dict(marine_raw)
+    for section in ("hourly", "daily"):
+        block = marine_raw.get(section)
+        if not isinstance(block, dict):
+            continue
+        new_block = dict(block)
+        if height_bias_m:
+            for key in _BIAS_HEIGHT_KEYS[section]:
+                if key in new_block:
+                    new_block[key] = _offset_series(new_block[key], height_bias_m)
+        if period_bias_s:
+            for key in _BIAS_PERIOD_KEYS[section]:
+                if key in new_block:
+                    new_block[key] = _offset_series(new_block[key], period_bias_s)
+        adjusted[section] = new_block
+    return adjusted
+
+
+# ---------------------------------------------------------------------------
 # Fetchers (network, graceful degradation)
 # ---------------------------------------------------------------------------
 
@@ -1254,6 +1334,81 @@ def build_weather(wind_raw: dict[str, Any], units: str) -> dict[str, Any]:
     return {"days": days}
 
 
+# ---------------------------------------------------------------------------
+# Forecast archive (the verification loop's forecast side)
+# ---------------------------------------------------------------------------
+
+
+def build_archive_records(
+    marine_days: list[dict[str, Any]],
+    surf_windows: list[dict[str, Any]],
+    units: dict[str, Any],
+    spot_name: str,
+    spot_slug: str,
+    archived_on: str,
+) -> list[dict[str, Any]]:
+    """One append-only snapshot per forecast day.
+
+    Each record carries the run date (`archived_on`), the forecast day it
+    predicts (`date`), the lead time in days, the units in effect, and that
+    day's swell/wave summary (in display units). When a surf window was computed
+    for the day its best block is attached under `best_window`, so
+    /surfing:verify can compare the model's call for a day against the session
+    log for it. Returns [] when there is no forecast to snapshot.
+
+    The caller passes the RAW (pre-bias) forecast: the verification loop judges
+    the model's own prediction, so a stored bias must never fold back into what
+    a later /surfing:verify compares against (that would un-learn the bias).
+    """
+    if not marine_days:
+        return []
+    windows = {w["date"]: w for w in (surf_windows or []) if w.get("date")}
+
+    records = []
+    for day in marine_days:
+        forecast_date = day.get("date")
+        if not forecast_date:
+            continue
+        summary = day.get("summary", {})
+        try:
+            lead_days = (date.fromisoformat(forecast_date) - date.fromisoformat(archived_on)).days
+        except (ValueError, TypeError):
+            lead_days = None
+        record: dict[str, Any] = {
+            "archived_on": archived_on,
+            "spot": spot_name,
+            "spot_slug": spot_slug,
+            "date": forecast_date,
+            "lead_days": lead_days,
+            "units": units,
+            "wave_height": summary.get("wave_height_max"),
+            "swell_height": summary.get("swell_height_max"),
+            "swell_period_s": summary.get("swell_period_max_s"),
+            "swell_direction": summary.get("swell_direction_dominant"),
+        }
+        window = windows.get(forecast_date)
+        if window:
+            record["best_window"] = {
+                "best_time": window.get("best_time"),
+                "rating": window.get("rating"),
+                "score": window.get("score"),
+                "wind": window.get("wind"),
+            }
+        records.append(record)
+    return records
+
+
+def write_archive(directory: str, slug: str, records: list[dict[str, Any]]) -> str:
+    """Append forecast snapshots as JSONL to `directory/<slug>.jsonl`, creating
+    the directory if needed. Append-only machine data; returns the file path."""
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, f"{slug}.jsonl")
+    with open(path, "a", encoding="utf-8") as f:
+        for record in records:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return path
+
+
 @click.command()
 @click.option(
     "--coordinates",
@@ -1283,6 +1438,12 @@ def build_weather(wind_raw: dict[str, Any], units: str) -> dict[str, Any]:
 @click.option("--days", type=int, default=7, help="Forecast days (1-7)")
 @click.option("--tide-station", default=None, help="NOAA CO-OPS station ID override (skips nearest-station lookup)")
 @click.option(
+    "--archive",
+    default=None,
+    help="Directory (the surf folder's forecasts/) to append one JSONL forecast snapshot per day to, "
+    "as forecasts/<spot-slug>.jsonl. The forecast side of the verification loop; append-only machine data.",
+)
+@click.option(
     "--units",
     type=click.Choice(["metric", "imperial"]),
     default=None,
@@ -1303,6 +1464,7 @@ def cli(
     facing: float | None,
     days: int,
     tide_station: str | None,
+    archive: str | None,
     units: str | None,
     target_day: str | None,
 ):
@@ -1321,6 +1483,7 @@ def cli(
             facing = float(profile["facing_deg"])
         tide_station = tide_station or profile.get("tide_station")
         units = units or surfer_units(surfer) or "metric"
+        bias_cfg = parse_model_bias(profile) if spot_file else None
         if target_day is not None:
             date.fromisoformat(target_day)
     except ValueError as e:
@@ -1330,7 +1493,13 @@ def cli(
     days = max(1, min(days, 7))
     gaps: list[str] = []
 
+    # marine_raw stays the model's raw forecast (the archive snapshots it); the
+    # report and verdicts run on report_marine, which folds in any stored bias.
     marine_raw = fetch_marine(lat, lon, days)
+    if bias_cfg:
+        report_marine = apply_swell_bias(marine_raw, bias_cfg["swell_height_m"], bias_cfg["swell_period_s"])
+    else:
+        report_marine = marine_raw
     wind_raw = fetch_wind_weather(lat, lon, days)
 
     buoy_cfg = profile.get("buoy")
@@ -1350,10 +1519,10 @@ def cli(
     else:
         tides = fetch_tides(lat, lon, days)
 
-    tz_name = marine_raw.get("timezone") or wind_raw.get("timezone") or "UTC"
+    tz_name = report_marine.get("timezone") or wind_raw.get("timezone") or "UTC"
     daylight = fetch_daylight(lat, lon, tz_name, days)
 
-    marine_days = build_marine_days(marine_raw, wind_raw, facing, units)
+    marine_days = build_marine_days(report_marine, wind_raw, facing, units)
 
     # Target date for the report filename: explicit target day, else the
     # forecast window's first day - never the run date. With no window and no
@@ -1393,10 +1562,10 @@ def cli(
             if target_date
             else None,
         },
-        "marine": {"days": marine_days} if marine_days else marine_raw,
+        "marine": {"days": marine_days} if marine_days else report_marine,
         "buoy": build_buoy(buoy, units),
         "tides": build_tides(tides, units),
-        "sea_temperature": build_sea_temperature(marine_raw, buoy, units),
+        "sea_temperature": build_sea_temperature(report_marine, buoy, units),
         "daylight": daylight,
         "weather": build_weather(wind_raw, units),
     }
@@ -1405,6 +1574,44 @@ def cli(
         result["surf_windows"] = build_surf_windows(marine_days, daylight, units)
     elif facing is None:
         gaps.append("surf_windows and wind classification not computed - pass --facing (degrees the spot faces out to sea)")
+
+    # Applied model bias echo: heights in the payload's display units (unit-neutral
+    # keys, per the units object), period always in seconds. The stored offset is
+    # metric; height_out converts it to the units in effect for a labelled note.
+    if bias_cfg:
+        result["bias"] = {
+            "applied": bool(bias_cfg["swell_height_m"] or bias_cfg["swell_period_s"]),
+            "swell_height": height_out(bias_cfg["swell_height_m"], units),
+            "swell_period_s": bias_cfg["swell_period_s"],
+            "samples": bias_cfg["samples"],
+            "last_verified": bias_cfg["last_verified"],
+            "note": bias_cfg["note"],
+            "source": spot_file,
+        }
+
+    if archive:
+        # Snapshot the RAW model forecast, never the bias-corrected view: verify
+        # judges the model's own prediction, so re-deriving bias from a corrected
+        # archive would converge to zero and un-learn the correction.
+        if bias_cfg:
+            raw_days = build_marine_days(marine_raw, wind_raw, facing, units)
+            raw_windows = (
+                build_surf_windows(raw_days, daylight, units) if facing is not None and raw_days else []
+            )
+        else:
+            raw_days = marine_days
+            raw_windows = result.get("surf_windows", [])
+        records = build_archive_records(
+            raw_days, raw_windows, result["units"], spot_name, spot_slug, date.today().isoformat()
+        )
+        if not records:
+            gaps.append("archive: no forecast days to snapshot")
+        else:
+            try:
+                path = write_archive(archive, spot_slug, records)
+                result["archive"] = {"path": path, "appended": len(records)}
+            except OSError as e:
+                gaps.append(f"archive: could not append forecast snapshot ({e})")
 
     if target_date is None:
         gaps.append(
