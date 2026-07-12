@@ -2,7 +2,10 @@
   "conditions": {
     "spot": {
       "name": "Mundaka",
-      "coordinates": [43.407, -2.699],
+      "coordinates": [
+        43.407,
+        -2.699
+      ],
       "facing_deg": 350,
       "facing_compass": "N",
       "timezone": "Europe/Madrid"
@@ -27,33 +30,84 @@
     "tides": {
       "source": "WorldTides",
       "datum": "CD",
-      "station": {"name": "Bermeo, Spain", "url": "https://www.worldtides.info/"},
+      "station": {
+        "name": "Bermeo, Spain",
+        "url": "https://www.worldtides.info/"
+      },
       "days": [
         {
           "date": "2026-07-10",
           "events": [
-            {"time": "01:14", "height": 4.0, "type": "high"},
-            {"time": "07:30", "height": 1.0, "type": "low"},
-            {"time": "13:37", "height": 4.2, "type": "high"},
-            {"time": "19:54", "height": 1.1, "type": "low"}
+            {
+              "time": "01:14",
+              "height": 4.0,
+              "type": "high"
+            },
+            {
+              "time": "07:30",
+              "height": 1.0,
+              "type": "low"
+            },
+            {
+              "time": "13:37",
+              "height": 4.2,
+              "type": "high"
+            },
+            {
+              "time": "19:54",
+              "height": 1.1,
+              "type": "low"
+            }
           ]
         },
         {
           "date": "2026-07-11",
           "events": [
-            {"time": "01:58", "height": 4.1, "type": "high"},
-            {"time": "08:14", "height": 0.9, "type": "low"},
-            {"time": "14:21", "height": 4.3, "type": "high"},
-            {"time": "20:38", "height": 1.0, "type": "low"}
+            {
+              "time": "01:58",
+              "height": 4.1,
+              "type": "high"
+            },
+            {
+              "time": "08:14",
+              "height": 0.9,
+              "type": "low"
+            },
+            {
+              "time": "14:21",
+              "height": 4.3,
+              "type": "high"
+            },
+            {
+              "time": "20:38",
+              "height": 1.0,
+              "type": "low"
+            }
           ]
         },
         {
           "date": "2026-07-12",
           "events": [
-            {"time": "02:42", "height": 4.2, "type": "high"},
-            {"time": "08:58", "height": 0.8, "type": "low"},
-            {"time": "15:05", "height": 4.4, "type": "high"},
-            {"time": "21:22", "height": 0.9, "type": "low"}
+            {
+              "time": "02:42",
+              "height": 4.2,
+              "type": "high"
+            },
+            {
+              "time": "08:58",
+              "height": 0.8,
+              "type": "low"
+            },
+            {
+              "time": "15:05",
+              "height": 4.4,
+              "type": "high"
+            },
+            {
+              "time": "21:22",
+              "height": 0.9,
+              "type": "low"
+            }
           ]
         }
       ]
@@ -70,6 +124,382 @@
           "daylight_hours": 15.0
         }
       ]
+    },
+    "marine": {
+      "days": [
+        {
+          "date": "2026-07-11",
+          "summary": {
+            "wave_height_max": 1.7,
+            "swell_height_max": 1.6,
+            "swell_period_max_s": 13.0,
+            "swell_direction_dominant": "NW"
+          },
+          "blocks": [],
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 1.3,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 8,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.2,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 1.3,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 8,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.2,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 1.3,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 8,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.2,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 1.6,
+              "swell_period_s": 13.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 11,
+              "wind_direction": "ESE",
+              "wind_direction_deg": 112,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.8,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 1.6,
+              "swell_period_s": 13.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 11,
+              "wind_direction": "ESE",
+              "wind_direction_deg": 112,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.8,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 1.6,
+              "swell_period_s": 13.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 11,
+              "wind_direction": "ESE",
+              "wind_direction_deg": 112,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.8,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 1.5,
+              "swell_period_s": 12.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 16,
+              "wind_direction": "SW",
+              "wind_direction_deg": 225,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.4,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 1.5,
+              "swell_period_s": 12.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 16,
+              "wind_direction": "SW",
+              "wind_direction_deg": 225,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.4,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 1.5,
+              "swell_period_s": 12.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 16,
+              "wind_direction": "SW",
+              "wind_direction_deg": 225,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.4,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 1.2,
+              "swell_period_s": 11.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 22,
+              "wind_direction": "WSW",
+              "wind_direction_deg": 247,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.1,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 1.2,
+              "swell_period_s": 11.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 22,
+              "wind_direction": "WSW",
+              "wind_direction_deg": 247,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.1,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 1.2,
+              "swell_period_s": 11.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 22,
+              "wind_direction": "WSW",
+              "wind_direction_deg": 247,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.1,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 1.2,
+              "swell_period_s": 11.0,
+              "swell_direction": "WNW",
+              "swell_direction_deg": 292,
+              "wind_speed": 22,
+              "wind_direction": "WSW",
+              "wind_direction_deg": 247,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.1,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 0.9,
+              "swell_period_s": 10.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 10,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 4.2,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 0.9,
+              "swell_period_s": 10.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 10,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 4.2,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 0.9,
+              "swell_period_s": 10.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 10,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 4.2,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 0.9,
+              "swell_period_s": 10.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 10,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 4.2,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 0.9,
+              "swell_period_s": 10.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 10,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 4.2,
+                "rating": "fair"
+              }
+            }
+          ]
+        }
+      ]
     }
   },
   "spot_data": {
@@ -80,9 +510,21 @@
       "Localism and a strict lineup pecking order; respect the priority or stay on the shoulder."
     ],
     "webcams": [
-      {"name": "Mundaka rivermouth cam", "url": "https://www.surfline.com/surf-report/mundaka", "free": false},
-      {"name": "Bermeo harbour live view", "url": "https://www.windy.com/webcams/bermeo", "free": true},
-      {"name": "Euskadi coastal cam network", "url": "https://www.euskadi.eus/webcams/mundaka", "free": true}
+      {
+        "name": "Mundaka rivermouth cam",
+        "url": "https://www.surfline.com/surf-report/mundaka",
+        "free": false
+      },
+      {
+        "name": "Bermeo harbour live view",
+        "url": "https://www.windy.com/webcams/bermeo",
+        "free": true
+      },
+      {
+        "name": "Euskadi coastal cam network",
+        "url": "https://www.euskadi.eus/webcams/mundaka",
+        "free": true
+      }
     ]
   },
   "analysis": {
@@ -91,18 +533,68 @@
       "verdict": "go",
       "one_liner": "Clean 1.2 m NW groundswell at 13 s with light offshore wind; the sandbar should be firing on the pushing tide.",
       "windows": [
-        {"from": "07:00", "to": "10:30", "label": "Dawn patrol"},
-        {"from": "19:00", "to": "21:00", "label": "Evening glass-off"}
+        {
+          "from": "07:00",
+          "to": "10:30",
+          "label": "Dawn patrol"
+        },
+        {
+          "from": "19:00",
+          "to": "21:00",
+          "label": "Evening glass-off"
+        }
       ]
     },
     "week": [
-      {"date": "2026-07-11", "verdict": "go", "swell": "1.2 m NW @ 13 s", "wind": "8 km/h offshore", "why": "clean groundswell, light offshore, pushing tide"},
-      {"date": "2026-07-12", "verdict": "check", "swell": "0.9 m NW @ 11 s", "wind": "14 km/h cross-shore", "why": "dropping and a touch bumpy by midday"},
-      {"date": "2026-07-13", "verdict": "skip", "swell": "0.4 m W @ 7 s", "wind": "22 km/h onshore", "why": "small windswell, blown out"},
-      {"date": "2026-07-14", "verdict": "skip", "swell": "0.3 m W @ 6 s", "wind": "25 km/h onshore", "why": "flat and messy"},
-      {"date": "2026-07-15", "verdict": "check", "swell": "0.8 m NW @ 10 s", "wind": "12 km/h cross-shore", "why": "new pulse filling in, worth a dawn look"},
-      {"date": "2026-07-16", "verdict": "go", "swell": "1.5 m NW @ 14 s", "wind": "6 km/h offshore", "why": "solid long-period swell, glassy morning"},
-      {"date": "2026-07-17", "verdict": "check", "swell": "1.1 m NW @ 12 s", "wind": "16 km/h cross-shore", "why": "still fun early before the wind builds"}
+      {
+        "date": "2026-07-11",
+        "verdict": "go",
+        "swell": "1.2 m NW @ 13 s",
+        "wind": "8 km/h offshore",
+        "why": "clean groundswell, light offshore, pushing tide"
+      },
+      {
+        "date": "2026-07-12",
+        "verdict": "check",
+        "swell": "0.9 m NW @ 11 s",
+        "wind": "14 km/h cross-shore",
+        "why": "dropping and a touch bumpy by midday"
+      },
+      {
+        "date": "2026-07-13",
+        "verdict": "skip",
+        "swell": "0.4 m W @ 7 s",
+        "wind": "22 km/h onshore",
+        "why": "small windswell, blown out"
+      },
+      {
+        "date": "2026-07-14",
+        "verdict": "skip",
+        "swell": "0.3 m W @ 6 s",
+        "wind": "25 km/h onshore",
+        "why": "flat and messy"
+      },
+      {
+        "date": "2026-07-15",
+        "verdict": "check",
+        "swell": "0.8 m NW @ 10 s",
+        "wind": "12 km/h cross-shore",
+        "why": "new pulse filling in, worth a dawn look"
+      },
+      {
+        "date": "2026-07-16",
+        "verdict": "go",
+        "swell": "1.5 m NW @ 14 s",
+        "wind": "6 km/h offshore",
+        "why": "solid long-period swell, glassy morning"
+      },
+      {
+        "date": "2026-07-17",
+        "verdict": "check",
+        "swell": "1.1 m NW @ 12 s",
+        "wind": "16 km/h cross-shore",
+        "why": "still fun early before the wind builds"
+      }
     ]
   },
   "gaps": []

@@ -1171,6 +1171,34 @@ def build_marine_days(
                 block["quality"] = rate_block(s_ht_m, s_per, spd_ms, wtype)
             blocks.append(block)
 
+        # Full 1-hour resolution for the day, used by the tide chart's aligned
+        # hourly strip. Leaner than blocks (only the strip's four metrics plus
+        # the direction degrees the renderer needs to draw wind/swell arrows).
+        hours = []
+        for hour in range(24):
+            ts = f"{date_str}T{hour:02d}:00"
+            if ts not in wave_ht:
+                continue
+            spd_ms = wind_speed.get(ts)
+            wdir = wind_dir.get(ts)
+            wtype = classify_wind(wdir, facing, spd_ms) if facing is not None else None
+            s_ht_m = swell_ht.get(ts)
+            s_per = swell_per.get(ts)
+            entry: dict[str, Any] = {
+                "time": f"{hour:02d}:00",
+                "swell_height": height_out(s_ht_m, units),
+                "swell_period_s": s_per,
+                "swell_direction": compass(swell_dir.get(ts)),
+                "swell_direction_deg": swell_dir.get(ts),
+                "wind_speed": wind_out(spd_ms, units),
+                "wind_direction": compass(wdir),
+                "wind_direction_deg": wdir,
+                "wind_type": wtype,
+            }
+            if facing is not None:
+                entry["quality"] = rate_block(s_ht_m, s_per, spd_ms, wtype)
+            hours.append(entry)
+
         def _get(key: str) -> Any:
             values = daily.get(key, [])
             return values[i] if i < len(values) else None
@@ -1185,6 +1213,7 @@ def build_marine_days(
                     "swell_direction_dominant": compass(_get("swell_wave_direction_dominant")),
                 },
                 "blocks": blocks,
+                "hours": hours,
             }
         )
     return days

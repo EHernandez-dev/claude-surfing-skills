@@ -101,6 +101,16 @@ No buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and
 
 {If facing was not provided, wind_type is null: state that wind could not be classified offshore/onshore and give raw direction + speed only.}
 
+### Hour by hour ({target day})
+
+{The target day's hourly forecast from marine.days[<target day>].hours[], clipped to daylight hours (roughly first_light..last_light from the Daylight section). This is the hour-by-hour detail behind the tide chart's aligned strip. Read it alongside the tide highs/lows below: line each hour up against the tide state. Skip this table when the target day has no hours (e.g. marine unavailable).}
+
+| Time | Swell | Period | Wind | Quality |
+|------|-------|--------|------|---------|
+| {HH:MM} | {swell_height} {units.wave_height} from {swell_direction} | {swell_period_s}s | {wind_speed} {units.wind_speed} {wind_direction}, {wind_type} | {quality.rating} ({quality.score}/10) |
+
+{If facing was not provided, quality and wind_type are null: drop the Quality column and give raw wind direction + speed.}
+
 ### Tides
 
 {If tide data available:}

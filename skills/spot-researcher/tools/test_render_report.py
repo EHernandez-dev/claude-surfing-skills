@@ -249,6 +249,67 @@ class TestTideSvg:
         svg = tide_svg(extremes, [], None, "m")
         assert "<svg" in svg and "</svg>" in svg
 
+    HOURS = [
+        {"time": "07:00", "swell_height": 1.3, "swell_period_s": 12.0,
+         "swell_direction_deg": 315.0, "wind_speed": 8, "wind_direction_deg": 90.0,
+         "wind_type": "offshore", "quality": {"score": 7.2, "rating": "good"}},
+        {"time": "13:00", "swell_height": 1.5, "swell_period_s": 12.0,
+         "swell_direction_deg": 292.0, "wind_speed": 16, "wind_direction_deg": 225.0,
+         "wind_type": "cross-shore", "quality": {"score": 5.4, "rating": "fair"}},
+        {"time": "17:00", "swell_height": 1.2, "swell_period_s": 11.0,
+         "swell_direction_deg": 292.0, "wind_speed": 22, "wind_direction_deg": 247.0,
+         "wind_type": "onshore", "quality": {"score": 3.1, "rating": "poor"}},
+    ]
+
+    def test_no_strip_without_hours(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
+        assert "strip-bar" not in svg
+        assert (
+            f'viewBox="0 0 {render_report._SVG_W:.2f} {render_report._SVG_H:.2f}"' in svg
+        )
+
+    def test_strip_renders_bar_and_arrow_per_hour(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        assert svg.count('class="strip-bar') == 3
+        assert svg.count('class="strip-arrow') == 3
+        total = render_report._SVG_H + render_report._STRIP_H
+        assert f'viewBox="0 0 {render_report._SVG_W:.2f} {total:.2f}"' in svg
+
+    def test_strip_quality_and_wind_classes(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        assert "strip-bar q-go" in svg  # good rating
+        assert "strip-bar q-check" in svg  # fair rating
+        assert "strip-bar q-skip" in svg  # poor rating
+        assert "strip-arrow wind-off" in svg
+        assert "strip-arrow wind-on" in svg
+        assert "strip-arrow wind-cross" in svg
+
+    def test_strip_bar_aligns_with_hour_x(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        cx = render_report._PAD_L + (7.0 / 24.0) * render_report._PLOT_W
+        col_w = render_report._PLOT_W / 24.0
+        bar_w = max(4.0, min(col_w * 0.55, 20.0))
+        assert f'x="{cx - bar_w / 2:.2f}"' in svg
+
+    def test_strip_wind_arrow_points_downwind(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        # wind from 90 deg blows toward 270; arrow rotated by (90 + 180) % 360
+        cx = render_report._PAD_L + (7.0 / 24.0) * render_report._PLOT_W
+        assert f'rotate(270.00 {cx:.2f} ' in svg
+
+
+class TestHourlyStripInRender:
+    def test_clips_to_daylight_hours(self):
+        # Fixture marine day carries 24 hours; daylight 06:12-22:23 keeps 06..23.
+        html = render(load_package())
+        assert html.count('class="strip-bar') == 18
+
+    def test_strip_absent_without_marine_hours(self):
+        pkg = load_package()
+        pkg["conditions"]["marine"] = {"days": []}
+        # No SVG bars emitted (the CSS class definitions always exist).
+        assert 'class="strip-bar' not in render(pkg)
+
 
 # ---------------------------------------------------------------------------
 # Renderer degradation, escaping, self-containment

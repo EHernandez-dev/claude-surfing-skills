@@ -857,6 +857,36 @@ class TestCliUnitsContract:
         assert imperial["tides"]["days"][0]["events"][0]["height"] == 13.5  # 4.113 m
 
 
+class TestHourlySeries:
+    def test_hours_present_and_hourly(self, patched_fetchers):
+        day = run_cli()["marine"]["days"][0]
+        # MARINE_RAW carries hourly samples at 05:00 and 08:00 only.
+        assert [h["time"] for h in day["hours"]] == ["05:00", "08:00"]
+        h0 = day["hours"][0]
+        for key in ("swell_height", "swell_period_s", "swell_direction",
+                    "swell_direction_deg", "wind_speed", "wind_direction",
+                    "wind_direction_deg", "wind_type", "quality"):
+            assert key in h0, key
+        assert h0["swell_height"] == 0.9
+        assert h0["swell_period_s"] == 12.0
+        assert h0["swell_direction_deg"] == 300.0
+        assert h0["wind_direction_deg"] == 90.0
+
+    def test_hours_convert_with_units(self, patched_fetchers):
+        m = run_cli("--units", "metric")["marine"]["days"][0]["hours"][0]
+        i = run_cli("--units", "imperial")["marine"]["days"][0]["hours"][0]
+        assert m["swell_height"] == 0.9  # m
+        assert i["swell_height"] == 3.0  # 0.9 m -> ft
+        assert m["wind_speed"] == 18  # 5 m/s -> km/h
+        assert i["wind_speed"] == 10  # 5 m/s -> kn
+
+    def test_hours_omit_quality_without_facing(self):
+        days = fetch_conditions.build_marine_days(MARINE_RAW, WIND_RAW, None, "metric")
+        h0 = days[0]["hours"][0]
+        assert "quality" not in h0
+        assert h0["wind_type"] is None
+
+
 class TestCliReportNaming:
     def test_target_date_falls_back_to_window_start(self, patched_fetchers):
         data = run_cli()
