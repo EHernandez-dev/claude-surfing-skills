@@ -27,6 +27,8 @@ cd ~/surf && claude -p "/surfing:briefing"
 
 The alert is designed so that **a ping means something**: it fires only on a real works-on match (size, period, and an offshore/light window, all read from the spot's own profile), so you can wire it straight to a notification without noise. See "Notify only when it fires" below.
 
+A scheduled briefing has a useful side effect: each profiled-spot fetch runs with `--archive`, appending that morning's forecast to `forecasts/<slug>.jsonl`. Over time this builds the forecast archive that `/surfing:verify` compares against your session logs to learn each spot's model bias. A daily briefing is the low-effort way to keep the archive current; nothing else is required.
+
 ## Scheduling
 
 ### Option A: Claude Code scheduled routines (recommended)

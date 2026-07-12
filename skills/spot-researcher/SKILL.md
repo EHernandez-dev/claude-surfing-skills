@@ -18,6 +18,7 @@ The plugin reads and writes everything relative to the user's working directory 
 - `reports/` - generated reports, named `{target-date}-{spot-slug}-{verdict}.md`, each with a
   sibling `{target-date}-{spot-slug}-{verdict}.html` (the deterministic visual report, Step 6C).
 - `sessions/` - the surfer's own session logs.
+- `forecasts/<slug>.jsonl` - append-only forecast snapshots per spot (`fetch_conditions.py --archive`), the forecast side of the verification loop (`/surfing:verify`). Machine-appended JSONL, kept out of `spots/` so hand-edited YAML and machine data never share a directory.
 
 ## When to Use This Skill
 
@@ -115,7 +116,7 @@ uv run python fetch_conditions.py \
   --days 7
 ```
 
-Optional args: `--spot-file {path/to/spots/slug.yaml}` loads coordinates, name, facing, tide station, and pinned buoy from an existing spot profile (pass it instead of `--coordinates`/`--spot-name`/`--facing` when a profile exists; use the absolute path, the surf folder is the user's working directory, not the tools directory); `--surfer-file {path/to/surfer.yaml}` applies the surfer profile's units preference; `--units metric|imperial` (precedence: flag, then surfer profile, then metric; metric = heights m, wind km/h, temps °C; imperial = ft, kn, °F); `--target-day YYYY-MM-DD` keys the report filename to the day the user intends to surf (when the user names no day and `surfer.yaml` sets `target_days`, pass the next date matching one of them; otherwise it defaults to the forecast window's first day); `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--days` 1-7 (default 7).
+Optional args: `--spot-file {path/to/spots/slug.yaml}` loads coordinates, name, facing, tide station, pinned buoy, and any stored `model_bias` from an existing spot profile (pass it instead of `--coordinates`/`--spot-name`/`--facing` when a profile exists; use the absolute path, the surf folder is the user's working directory, not the tools directory); `--surfer-file {path/to/surfer.yaml}` applies the surfer profile's units preference; `--units metric|imperial` (precedence: flag, then surfer profile, then metric; metric = heights m, wind km/h, temps °C; imperial = ft, kn, °F); `--target-day YYYY-MM-DD` keys the report filename to the day the user intends to surf (when the user names no day and `surfer.yaml` sets `target_days`, pass the next date matching one of them; otherwise it defaults to the forecast window's first day); `--tide-station {noaa_id}` overrides nearest-station lookup when the spot has a known better station; `--archive {surf-folder}/forecasts` appends one forecast snapshot per day to `forecasts/<slug>.jsonl` (the verification loop's forecast side); `--days` 1-7 (default 7).
 
 Optional environment: `WORLDTIDES_KEY` enables station-grade tide extremes from WorldTides for spots outside NOAA coverage (heights on chart datum). Without it, non-US spots report a tide gap.
 
@@ -133,6 +134,8 @@ This returns JSON with:
 - **daylight**: per-day `first_light`, `sunrise`, `sunset`, `last_light`, `daylight_hours` (dawn patrol planning)
 - **weather**: per-day air conditions - `conditions`, `icon`, `temp_max`/`temp_min`, `precip_probability_pct`, `uv_index_max`
 - **surf_windows**: best-rated surfable-light block per day (`date`, `best_time`, `rating`, `score`, swell + wind summary) - only present when `--facing` was provided; `best_time` is clamped to first light so it never lands in the dark
+- **bias** (only when the spot profile carries a `model_bias`, via `--spot-file`): the applied per-spot correction from `/surfing:verify`. `applied`, `swell_height` (the offset in the payload's display units), `swell_period_s`, `samples`, `last_verified`, `note`, `source`. The offset is already folded into the marine heights/periods, block quality, and surf windows before you see them; surface `note` so the correction is visible, never silent
+- **archive** (only when `--archive` was passed and a forecast was snapshotted): `path` to `forecasts/<slug>.jsonl` and the count `appended`
 - **gaps**: any API failures or skipped computations
 
 **Important caveat on `quality` ratings:** the script's heuristic is spot-agnostic (period + size + wind). It does NOT know the spot's swell window, ideal tide, or size ceiling. Phase 4 must adjust these ratings using the works-on profile from research (e.g., a 3 m WNW swell rates "good" generically but closes out a beach break that maxes at 2 m).
@@ -811,6 +814,7 @@ uv run python fetch_conditions.py \
 - `--units metric|imperial` (optional) - output units; precedence: flag, then surfer profile, then metric
 - `--target-day YYYY-MM-DD` (optional) - the day the user intends to surf; keys `report.target_date` (defaults to the forecast window's first day)
 - `--tide-station ID` (optional) - NOAA CO-OPS station override
+- `--archive DIR` (optional) - append one forecast snapshot per day to `DIR/<slug>.jsonl` (pass the surf folder's `forecasts/`); the forecast side of `/surfing:verify`
 - `WORLDTIDES_KEY` (optional environment variable) - enables WorldTides tide extremes (chart datum) outside NOAA coverage
 
 ### Facing Direction Quick Reference
