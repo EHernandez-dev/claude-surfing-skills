@@ -15,7 +15,8 @@ The plugin reads and writes everything relative to the user's working directory 
 
 - `surfer.yaml` - the surfer profile: skill level, comfort zone, boards, home spots, unit preference, target-day defaults (example to copy: `assets/surfer-template.yaml`). When present, verdicts are made for this surfer, not a generic expert, and its `units` preference applies (precedence: `--units` flag, then surfer profile, then metric).
 - `spots/<slug>.yaml` - one spot profile per researched spot (schema: `assets/spot-profile-template.yaml`): works-on profile, coordinates, facing, tide source, pinned buoy, webcams, hazard one-liners, `last_researched`. Every research run writes or updates it (Phase 7). Profiles never expire: always state the profile's age when using one, and suggest re-research past ~6 months.
-- `reports/` - generated reports, named `{target-date}-{spot-slug}-{verdict}.md`.
+- `reports/` - generated reports, named `{target-date}-{spot-slug}-{verdict}.md`, each with a
+  sibling `{target-date}-{spot-slug}-{verdict}.html` (the deterministic visual report, Step 6C).
 - `sessions/` - the surfer's own session logs.
 
 ## When to Use This Skill
@@ -47,6 +48,7 @@ Research Progress:
 - [ ] Phase 4: Spot Analysis (works-on profile, forecast match, hazards, backup-spot mini-forecast)
 - [ ] Phase 5: Report Generation (Report Writer agent)
 - [ ] Phase 6: Report Review & Validation (Report Reviewer agent)
+  - [ ] Phase 6C: Visual report rendered and opened
 - [ ] Phase 7: Spot Profile Update (spots/<slug>.yaml written or updated)
 - [ ] Phase 8: Completion (user notified, next steps provided)
 
@@ -454,6 +456,16 @@ When the target day's verdict is Skip, the mini-forecast is optional; a bare-nam
 
 Organize all gathered and analyzed data into structured JSON (conditions + spot_data + analysis + gaps, per Step 3C plus Phase 4 outputs, including `backup_forecasts` from Step 4E when the target day is a Go / Worth a check). When `surfer.yaml` exists, include its contents as `surfer_profile` so the writer can render the "Bottom line for your day" block.
 
+The `analysis` block MUST match this schema exactly. `render_report.py` (Step 6C) consumes exactly
+these fields, so this is a contract, not a suggestion:
+
+- `analysis.target_day`: `date` (`"YYYY-MM-DD"`, the report's target date), `verdict` (`"go"|"check"|"skip"`,
+  matching the verdict slug used to pick the report filename), `one_liner` (one sentence tying
+  swell + wind + tide, used as the hero sub line), `windows` (`[{from: "HH:MM", to: "HH:MM", label}]`,
+  the recommended session windows in local time)
+- `analysis.week`: one entry per Outlook row: `{date: "YYYY-MM-DD", verdict, swell, wind, why}`, where
+  `swell`/`wind`/`why` are display-ready strings with unit labels already applied
+
 #### Step 5B: Dispatch Report Writer Agent
 
 ```
@@ -617,8 +629,26 @@ Task(
 
 #### Step 6B: Process Validation Results
 
-- **PASS or PASS_WITH_FIXES:** Proceed to Phase 7 with the `report_path`
+- **PASS or PASS_WITH_FIXES:** Proceed to Step 6C with the `report_path`
 - **FAIL:** Present `remaining_issues` to the user and ask for guidance
+
+#### Step 6C: Render the Visual Report
+
+Once the markdown report passes review, render the deterministic HTML companion:
+
+1. Write the Step 5A data package (including the `analysis` block) to a JSON file (a temp path is fine).
+2. Run, from the user's working directory (the surf folder), so the HTML lands next to the
+   markdown report:
+
+   ```bash
+   uv run --project "{repo_root}/skills/spot-researcher/tools" python "{repo_root}/skills/spot-researcher/tools/render_report.py" --data {abs path to package.json}
+   ```
+
+3. The script prints JSON on exit 0 either way:
+   - Success: `{"html_path": "reports/{target-date}-{spot-slug}-{verdict}.html"}`
+   - Soft failure: `{"error": ..., "note": ...}`. The markdown report remains canonical; note the
+     failure to the user and continue, do not block on it.
+4. Open the HTML for the user: `open {html_path}` on macOS, `xdg-open {html_path}` on Linux.
 
 ### Phase 7: Spot Profile Update
 
@@ -646,7 +676,8 @@ If the profile already exists, update it in place, preserving hand-edits that do
 Report to user:
 
 1. **Success message:** "Spot research complete for {Spot Name}"
-2. **File locations:** Full absolute path to the generated report, and the spot profile written/updated in Phase 7
+2. **File locations:** Full absolute path to the generated report, the HTML visual report from
+   Step 6C, and the spot profile written/updated in Phase 7
 3. **Summary:** 2-3 sentences - break type and skill level, this week's best window, key hazards or gaps
 4. **Next steps:** Encourage the user to:
    - Check the free webcam (if found) before driving
@@ -660,6 +691,7 @@ Report to user:
 Spot research complete for Ocean Beach (SF)!
 
 Report saved to: reports/2026-07-09-ocean-beach-sf-go.md
+Visual report saved to: reports/2026-07-09-ocean-beach-sf-go.html (opened for you)
 Spot profile saved to: spots/ocean-beach-sf.yaml (future conditions checks skip re-research)
 
 Summary: Ocean Beach is a heavy, shifty beach break for advanced surfers - powerful rips,
@@ -761,4 +793,4 @@ uv run python fetch_conditions.py \
 
 ---
 
-**Skill Version:** 0.4.0 | **Last Updated:** 2026-07-12
+**Skill Version:** 0.5.0 | **Last Updated:** 2026-07-12

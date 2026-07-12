@@ -30,3 +30,5 @@ uv run pytest -v
 ## Keeping the Data Contract in Sync
 
 `skills/spot-researcher/SKILL.md` documents the exact JSON keys `fetch_conditions.py` returns (`units`, `report`, `marine`, `buoy`, `tides`, `sea_temperature`, `daylight`, `weather`, `surf_windows`, `gaps`), and the report template in `skills/spot-researcher/assets/report-template.md` references those same fields via placeholders. JSON keys are unit-neutral (no `_ft`/`_f`/`_kn` suffixes); the payload's `units` object states the units in effect. Any change to the script's output keys must be reflected in both places in the same change.
+
+`skills/spot-researcher/tools/render_report.py` is a second consumer of the `fetch_conditions.py` payload, plus the data package's `analysis` block (`analysis.target_day`, `analysis.week`; documented in SKILL.md Step 5A). A change to either the script's output keys or the `analysis` schema must be reflected everywhere all four stay in sync: `fetch_conditions.py`, `SKILL.md`, the report template, and `render_report.py`.

@@ -31,13 +31,16 @@ library that learns. Each increment is shippable, committed, and e2e-tested befo
 
 ## Increment 2: HTML visual report
 
+> Status: SHIPPED (2026-07-12, issue #7). `render_report.py` landed as SKILL.md Step 6C;
+> the `/prototype` design question was answered and the prototype files removed once the
+> design was implemented.
+
 - New `skills/spot-researcher/tools/render_report.py`: deterministic Python (no LLM) that
-  takes the run's data-package JSON and emits a self-contained `{date}-{slug}.html`:
+  takes the run's data-package JSON and emits a self-contained `{date}-{slug}-{verdict}.html`:
   hero verdict banner, tide curve SVG with session windows shaded (cosine interpolation
-  between high/low events; pure, unit-testable), per-day swell/wind bars (inline SVG),
-  Leaflet + OSM map centered on the spot, webcam cards, hazards summary.
-- SKILL.md Phase 5 addition: run renderer after the markdown report, then `open` the HTML.
-- Design question for `/prototype`: what the page should look like.
+  between high/low events; pure, unit-testable), week-at-a-glance rows, webcam cards,
+  hazards summary, Leaflet + OSM map centered on the spot.
+- SKILL.md Step 6C: run the renderer after the report review passes, then `open` the HTML.
 
 ## Increment 3: surf week planner
 
