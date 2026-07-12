@@ -1,6 +1,6 @@
 {
   "name": "surfing",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "description": "Automated surf spot research for surfers: aggregates Surfline, Wannasurf, surf-forecast.com spot guides, Open-Meteo marine forecasts, NOAA buoy observations and tide predictions into comprehensive surf spot reports with session windows, hazards, and wetsuit recommendations",
   "author": {
     "name": "Elena Hernandez"

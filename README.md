@@ -1,69 +1,139 @@
 <h1 align="center">Surfing Skills for Claude Code</h1>
 
-<h4 align="center">Automated surf spot research, built for <a href="https://claude.com/claude-code" target="_blank">Claude Code</a>.</h4>
+<h4 align="center">A surf companion, built for <a href="https://claude.com/claude-code" target="_blank">Claude Code</a>.</h4>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#support">Support</a>
+  <a href="#how-it-fits-together">How It Fits Together</a> •
+  <a href="#commands">Commands</a> •
+  <a href="#the-surf-folder">Surf Folder</a> •
+  <a href="#data-sources">Data Sources</a> •
+  <a href="#installation">Installation</a>
 </p>
 
-Ask Claude to research any surf spot. The spot-researcher skill pulls swell, wind, and tide forecasts, live NOAA buoy observations, spot guides, and community reports, then compiles a Markdown report with session windows keyed to tide, wind, and daylight, a full hazard breakdown, and a wetsuit recommendation.
+Research any surf spot once, then get instant, personalized morning calls forever. Claude pulls swell, wind, and tide forecasts, live buoy observations, spot guides, and community reports, and turns them into a spot-corrected verdict for the day: **Go**, **Worth a check**, or **Skip**. It remembers each spot you research, learns your quiver and skill level, ranks your week, and even learns how the forecast model misses your local break.
 
 ---
 
 ## Quick Start
 
-Install with [`npx skills`](https://github.com/vercel-labs/skills):
+Install the plugin (gives you the `/surfing:*` commands and the natural-language skill):
 
 ```
-npx skills add EHernandez-dev/claude-surfing-skills
+/plugin marketplace add EHernandez-dev/claude-surfing-skills
+/plugin install surfing@surfing-marketplace
+/reload-plugins
 ```
 
-Then just ask naturally: `"Research Ocean Beach SF"`. Claude generates a surf spot report in your current directory.
+Then, from a folder you'll keep your surf data in:
 
-> `npx skills` installs the `spot-researcher` skill, which drives the full workflow from natural-language requests. If you also want the `/surfing:*` slash commands, install the plugin instead, see [Installation](#installation).
+```
+/surfing:research Mundaka      # research a spot once (saves a reusable profile)
+/surfing:conditions Mundaka    # instant conditions check, any morning after
+/surfing:week                  # rank the week across your home spots
+```
+
+Or just ask naturally: `"Research Ocean Beach SF"`.
+
+> Prefer the skill without the slash commands? `npx skills add EHernandez-dev/claude-surfing-skills` installs just the `spot-researcher` skill, which drives research from natural language. The daily-companion commands (`conditions`, `week`, `briefing`, `verify`) come with the plugin. See [Installation](#installation).
+
+---
+
+## How It Fits Together
+
+The plugin is built around one idea: **research a spot once, reuse it forever.** Everything reads and writes a plain folder of files (your *surf folder*, no hidden state), so it stays yours and stays editable.
+
+```
+  ┌─ /surfing:research <spot> ──────────────┐
+  │  full report + saves a spot profile     │   do this once per spot
+  └──────────────────┬──────────────────────┘
+                     │  spots/<slug>.yaml  (works-on profile, buoy, hazards)
+                     ▼
+  ┌─ daily use, now instant & personal ─────────────────────────────┐
+  │  /surfing:conditions   one spot, right now                       │
+  │  /surfing:windows      best session windows this week            │   every morning
+  │  /surfing:week         ranked dashboard across your home spots   │
+  │  /surfing:briefing     tomorrow's call (+ silent swell alert)    │
+  └──────────────────┬──────────────────────────────────────────────┘
+                     │  archives each forecast to forecasts/<slug>.jsonl
+                     ▼
+  ┌─ the learning loop ─────────────────────────────────────────────┐
+  │  you log a session      → sessions/<date>-<slug>.md              │
+  │  /surfing:verify <spot> → compares logs vs archived forecasts,   │   whenever you surf
+  │                           stores the model bias in the profile   │
+  └─────────────────────────────────────────────────────────────────┘
+       the bias then sharpens every future conditions/week/briefing call
+```
+
+1. **Research once.** `/surfing:research` writes a full Markdown report *and* saves a **spot profile** (`spots/<slug>.yaml`): the conditions the spot works in, its coordinates and facing, the buoy to watch, hazards, and logistics.
+2. **Tell it about you.** A **surfer profile** (`surfer.yaml`) holds your skill level, boards, home spots, unit preference, and target days. Now every verdict is made for *you*, a small clean day can be a Go for a beginner and a Skip for an expert.
+3. **Daily checks are instant.** With a saved profile, `conditions`/`windows`/`week`/`briefing` skip all the web research: one deterministic fetch, verdicts corrected to the spot's own profile and weighed for you, in seconds.
+4. **It learns your break.** Daily checks quietly archive the forecast. When you log a session, `/surfing:verify` compares what you got against what was predicted and stores a per-spot **model bias** ("under-calls size by ~0.3 m here"), which every later call then corrects for.
+
+---
+
+## Commands
+
+| Command | What it does | Time |
+|---------|-------------|------|
+| `/surfing:research <spot>` | Full spot report (guide, hazards, logistics) + saves a reusable spot profile | 3-5 min |
+| `/surfing:conditions <spot>` | Instant conditions check: swell, wind, tides, buoy, water temp, daylight, verdict | ~30 sec |
+| `/surfing:windows <spot>` | Best session windows for one spot over the next 7 days | ~30 sec |
+| `/surfing:week [spots]` | Ranked dashboard of the week's best windows across your home spots, plus a visual HTML page | ~1 min |
+| `/surfing:briefing [--alert]` | Tomorrow's compact call across home spots; `--alert` stays silent unless a spot's works-on thresholds are forecast within 5 days | ~30 sec |
+| `/surfing:verify <spot>` | Compares your session logs against archived forecasts and stores the learned model bias | ~30 sec |
+
+Verdicts are always **Go / Worth a check / Skip**, corrected to the spot's works-on profile and personalized to your surfer profile, never a raw quality score. Reports save as `reports/{target-date}-{spot-slug}-{verdict}.md`, each with a self-contained HTML companion (map hero, tide curve with shaded session windows, hazards).
+
+The daily commands run unattended too: schedule the briefing and the swell alert so the morning call comes to you. See [`docs/AUTOMATION.md`](docs/AUTOMATION.md).
 
 **See it in action:**
 
-| Spot | What it shows |
+| Report | What it shows |
+|--------|---------------|
+| [Ocean Beach, SF](skills/spot-researcher/examples/2026-07-08-ocean-beach-sf.md) | Expert beach break: buoy vs model cross-check, tide-keyed windows, hazard breakdown |
+| [Verification loop at Mundaka](tests/end-to-end/2026-07-12-verify-mundaka-model-bias.md) | The full learn-from-your-sessions loop end to end |
+
+---
+
+## The Surf Folder
+
+The plugin reads and writes everything in one working directory (the folder you run the commands from). Plain, human-editable files, nothing hidden elsewhere:
+
+| Path | What it holds |
 |------|---------------|
-| [Ocean Beach, SF](skills/spot-researcher/examples/2026-07-08-ocean-beach-sf.md) | Expert-level beach break: buoy vs model cross-check, tide-keyed windows, hazard breakdown |
+| `surfer.yaml` | Your profile: skill level, boards, home spots, unit preference, target days (copy [`surfer-template.yaml`](skills/spot-researcher/assets/surfer-template.yaml)) |
+| `spots/<slug>.yaml` | One profile per researched spot: works-on conditions, coordinates, facing, buoy, hazards, and any learned model bias |
+| `reports/` | Generated reports (`{target-date}-{spot-slug}-{verdict}.md`) and their HTML companions |
+| `sessions/` | Your own session logs (`<date>-<slug>.md`), the input to the verification loop (template: [`session-log-template.md`](skills/spot-researcher/assets/session-log-template.md)) |
+| `forecasts/<slug>.jsonl` | Append-only forecast snapshots, the archive `/surfing:verify` learns from |
+
+To get started, copy the surfer template to `surfer.yaml`, list your `home_spots`, and research each of them once. Profiles never expire; every use shows the profile's age and suggests a refresh past roughly six months.
 
 ---
 
 ## How It Works
 
-The skill uses a hybrid architecture: a Python script for deterministic API calls, LLM agents for tasks requiring judgment.
+`/surfing:research` uses a hybrid architecture: a Python script for deterministic API calls, LLM agents for the parts that need judgment.
 
 ```mermaid
 graph TB
-    Start([User asks Claude to<br/>research a surf spot]) --> Search[Phase 1-2: Spot Identification<br/>Resolve coordinates, determine facing]
-
+    Start([Research a surf spot]) --> Search[Phase 1-2: Identify spot<br/>Resolve coordinates, determine facing]
     Search --> Parallel[Phase 3: Parallel Data Gathering]
-
     Parallel --> Python[Python Script<br/>Swell, wind, tides,<br/>buoy, water temp, daylight]
     Parallel --> Agent1[Researcher Agent 1<br/>Surfline + Wannasurf]
     Parallel --> Agent2[Researcher Agent 2<br/>surf-forecast.com + SurferToday]
     Parallel --> Agent3[Researcher Agent 3<br/>Community reports]
-
     Python --> Analyze
     Agent1 --> Analyze
     Agent2 --> Analyze
     Agent3 --> Analyze
-
-    Analyze[Phase 4: Spot Analysis<br/>Works-on profile, forecast match, hazards]
-
-    Analyze --> Writer[Phase 5: Report Writer Agent<br/>Generate markdown report]
-
-    Writer --> Reviewer[Phase 6: Report Reviewer Agent<br/>Validate accuracy, fix issues]
-
-    Reviewer --> End([Phase 7: User receives<br/>surf spot report])
-
+    Analyze[Phase 4: Analysis<br/>Works-on profile, forecast match, hazards]
+    Analyze --> Writer[Phase 5: Report Writer]
+    Writer --> Reviewer[Phase 6: Report Reviewer]
+    Reviewer --> Profile([Phase 7: Save spot profile])
     style Start fill:#e1f5ff
-    style End fill:#e1f5ff
+    style Profile fill:#e1f5ff
     style Parallel fill:#fff4e1
     style Python fill:#e8f5e9
     style Agent1 fill:#f0f0f0
@@ -73,40 +143,50 @@ graph TB
     style Reviewer fill:#fff3e0
 ```
 
-Three researcher agents gather data in parallel while a Python script fetches conditions. Dedicated agents write and review the final report. If a source fails, the skill documents the gap and continues.
+Three researcher agents gather data in parallel while a Python script fetches conditions; dedicated agents write and review the report; the final step saves the spot profile. If a source fails, the skill documents the gap and continues.
+
+The **daily commands are much lighter**: no web research, no agents. They run the same Python conditions fetcher against your saved profiles (in parallel for multi-spot sweeps) and correct the verdicts to each spot's works-on profile. That is why they take seconds, not minutes.
 
 ---
 
-## Features
+## Data Sources
 
-### Data Sources
-
-The skill aggregates from specialized surf sites and marine data APIs:
+The marine forecast works **worldwide**; tide and observed-buoy coverage depend on region and degrade gracefully.
 
 | Category | Sources |
 |----------|---------|
-| Spot guides | [Surfline](https://www.surfline.com), [Wannasurf](https://www.wannasurf.com), [surf-forecast.com](https://www.surf-forecast.com) |
-| Marine forecast | [Open-Meteo Marine API](https://open-meteo.com) |
-| Observations | [NOAA NDBC buoys](https://www.ndbc.noaa.gov) |
-| Tides | [NOAA CO-OPS](https://tidesandcurrents.noaa.gov) (US only), [tide-forecast.com](https://www.tide-forecast.com) fallback |
+| Spot guides | [Surfline](https://www.surfline.com), [Wannasurf](https://www.wannasurf.com), [surf-forecast.com](https://www.surf-forecast.com) (search-snippet level) |
+| Marine forecast | [Open-Meteo Marine](https://open-meteo.com) (swell, period, direction, sea temp), worldwide |
+| Observed buoys | [NOAA NDBC](https://www.ndbc.noaa.gov) (US and reach), [Puertos del Estado](https://portus.puertos.es) (Spain); a region-keyed registry other networks slot into |
+| Tides | [NOAA CO-OPS](https://tidesandcurrents.noaa.gov) (US), [WorldTides](https://www.worldtides.info) worldwide behind an optional `WORLDTIDES_KEY` (chart datum), else a [tide-forecast.com](https://www.tide-forecast.com) fallback note |
 | Wind & weather | [Open-Meteo](https://open-meteo.com) |
-| Community | Reddit, surf forums |
+| Community | Reddit, regional surf forums |
 
-**Coverage note:** The marine forecast works worldwide. Automatic tide predictions are US-only; non-US spots get a documented gap with manual lookup links. Report quality depends on how well-documented the spot is across these sources. Famous breaks get rich reports; obscure ones fall back to the Information Gaps pattern.
+**Units:** metric by default (heights in m, wind in km/h, temperatures in °C). Pass `--units imperial` (or set it in your surfer profile) for feet, knots, and °F. Precedence: the flag, then the surfer profile, then metric.
 
-### Graceful Degradation
-
-Missing data? The skill notes what's unavailable in an "Information Gaps" section and provides manual lookup links. You always get a report, even if some sources are down.
+**Graceful degradation:** no source ever hard-fails a run. Missing data is noted in an Information Gaps section with manual-lookup links, and a flaky API degrades a single spot rather than breaking the report.
 
 ---
 
 ## Installation
 
-**Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), [Node.js](https://nodejs.org) (for `npx`), [uv](https://docs.astral.sh/uv/) for the Python tools.
+**Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), [Node.js](https://nodejs.org) (for `npx`), and [uv](https://docs.astral.sh/uv/) for the Python tools.
 
-### Recommended: `npx skills`
+### Recommended: the plugin (full companion)
 
-[`npx skills`](https://github.com/vercel-labs/skills) installs the `spot-researcher` skill directly:
+The plugin bundles the `spot-researcher` skill plus all the `/surfing:*` slash commands:
+
+```
+/plugin marketplace add EHernandez-dev/claude-surfing-skills
+/plugin install surfing@surfing-marketplace
+/reload-plugins
+```
+
+Python dependencies install automatically if `uv` is available. No restart needed; `/reload-plugins` activates the plugin in the current session.
+
+### Alternative: `npx skills` (research skill only)
+
+[`npx skills`](https://github.com/vercel-labs/skills) installs just the `spot-researcher` skill, the natural-language research workflow, without the daily-companion slash commands:
 
 ```
 npx skills add EHernandez-dev/claude-surfing-skills
@@ -120,51 +200,15 @@ npx skills add EHernandez-dev/claude-surfing-skills -g        # install globally
 npx skills add EHernandez-dev/claude-surfing-skills -y        # skip confirmation prompts
 ```
 
-This gives you the full natural-language workflow (`"Research Ocean Beach SF"`). The `/surfing:*` slash commands are **not** included, install the plugin below if you want them.
+### Optional: `WORLDTIDES_KEY`
 
-### Alternative: Claude Code plugin
-
-The plugin bundles the same skill plus the `/surfing:*` slash commands:
-
-```
-/plugin marketplace add EHernandez-dev/claude-surfing-skills
-/plugin install surfing@surfing-marketplace
-/reload-plugins
-```
-
-Python dependencies install automatically if `uv` is available. No restart needed, `/reload-plugins` activates the plugin in the current session.
-
----
-
-## Usage
-
-### Commands
-
-| Command | What it does | Time |
-|---------|-------------|------|
-| `/surfing:research <spot>` | Full surf spot research report | 3-5 min |
-| `/surfing:conditions <spot>` | Swell, wind, tides, buoy observation, wetsuit call | ~30 sec |
-| `/surfing:windows <spot>` | Best session windows for this week | ~30 sec |
-| `/surfing:week [spots]` | Ranked dashboard of the week's best windows across your home spots | ~1 min |
-| `/surfing:briefing [--alert]` | Tomorrow's compact call across home spots; `--alert` fires only on a works-on match | ~30 sec |
-
-### Natural Language
-
-You can also just ask naturally:
-
-```
-"Research Ocean Beach SF"
-"I'm going to Ericeira next week, what should I know about Ribeira d'Ilhas?"
-"Generate a spot report for Pipeline"
-```
-
-Reports save to your current directory as `YYYY-MM-DD-spot-name.md`.
+Export a [WorldTides](https://www.worldtides.info) API key to get station-grade tide extremes outside US (NOAA) coverage. Without it, non-US spots fall back to a manual-lookup note; nothing breaks.
 
 ---
 
 ## Dependencies
 
-- [Python tools](skills/spot-researcher/tools/README.md) - swell, wind, tide, buoy, and daylight calculations
+- [Python tools](skills/spot-researcher/tools/README.md), the conditions fetcher, the deterministic HTML renderer, and the verification arithmetic
 
 ---
 
