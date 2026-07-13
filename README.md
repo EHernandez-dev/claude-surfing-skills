@@ -83,7 +83,7 @@ The plugin is built around one idea: **research a spot once, reuse it forever.**
 | `/surfing:briefing [--alert]` | Tomorrow's compact call across home spots; `--alert` stays silent unless a spot's works-on thresholds are forecast within 5 days | ~30 sec |
 | `/surfing:verify <spot>` | Compares your session logs against archived forecasts and stores the learned model bias | ~30 sec |
 
-Verdicts are always **Go / Worth a check / Skip**, corrected to the spot's works-on profile and personalized to your surfer profile, never a raw quality score. Reports save as `reports/{target-date}-{spot-slug}-{verdict}.md`, each with a self-contained HTML companion (map hero, tide curve with shaded session windows, hazards).
+Verdicts are always **Go / Worth a check / Skip**, corrected to the spot's works-on profile and personalized to your surfer profile, never a raw quality score. Reports save as `reports/{target-date}-{spot-slug}-{verdict}.md`, each with a self-contained, full-width HTML companion: a map hero, a **dawn-to-dusk tide chart** with an **hour-by-hour surf strip** aligned to it (swell height, wind, and per-hour quality), the week outlook, and hazards.
 
 The daily commands run unattended too: schedule the briefing and the swell alert so the morning call comes to you. See [`docs/AUTOMATION.md`](docs/AUTOMATION.md).
 
@@ -151,14 +151,14 @@ The **daily commands are much lighter**: no web research, no agents. They run th
 
 ## Data Sources
 
-The marine forecast works **worldwide**; tide and observed-buoy coverage depend on region and degrade gracefully.
+The marine forecast works **worldwide**, and so can tides: NOAA covers US coasts, and the free, keyless [EOT20](https://doi.org/10.17882/79489) global tide model covers everywhere else once set up (no API key, computed offline). Observed-buoy coverage depends on region. Everything degrades gracefully.
 
 | Category | Sources |
 |----------|---------|
 | Spot guides | [Surfline](https://www.surfline.com), [Wannasurf](https://www.wannasurf.com), [surf-forecast.com](https://www.surf-forecast.com) (search-snippet level) |
 | Marine forecast | [Open-Meteo Marine](https://open-meteo.com) (swell, period, direction, sea temp), worldwide |
 | Observed buoys | [NOAA NDBC](https://www.ndbc.noaa.gov) (US and reach), [Puertos del Estado](https://portus.puertos.es) (Spain); a region-keyed registry other networks slot into |
-| Tides | [NOAA CO-OPS](https://tidesandcurrents.noaa.gov) (US), [WorldTides](https://www.worldtides.info) worldwide behind an optional `WORLDTIDES_KEY` (chart datum), else a [tide-forecast.com](https://www.tide-forecast.com) fallback note |
+| Tides | [NOAA CO-OPS](https://tidesandcurrents.noaa.gov) (US); [WorldTides](https://www.worldtides.info) behind an optional `WORLDTIDES_KEY` (station-grade, chart datum); the free keyless [EOT20](https://doi.org/10.17882/79489) global harmonic model everywhere else (offline, mean sea level; one-time setup, ADR 0004); else a [tide-forecast.com](https://www.tide-forecast.com) fallback note |
 | Wind & weather | [Open-Meteo](https://open-meteo.com) |
 | Community | Reddit, regional surf forums |
 
@@ -200,9 +200,20 @@ npx skills add EHernandez-dev/claude-surfing-skills -g        # install globally
 npx skills add EHernandez-dev/claude-surfing-skills -y        # skip confirmation prompts
 ```
 
+### Optional: free offline tides (EOT20)
+
+Outside US (NOAA) coverage, tides can be predicted for free from the [EOT20](https://doi.org/10.17882/79489) global harmonic model, with no API key and no cost, computed locally (ADR 0004). One-time setup in the tools directory:
+
+```
+uv sync --extra tides                              # optional pyTMD + scientific stack
+uv run --extra tides python download_tide_model.py # ~2 GB EOT20 model, downloaded once
+```
+
+After that, non-US spots get a real tide curve (and the tide chart's hourly strip) offline. Heights are relative to mean sea level, so the *timing* of highs and lows is exact while absolute heights read differently from a printed chart-datum table. Skip this and non-US spots simply fall back to a manual-lookup note; nothing breaks.
+
 ### Optional: `WORLDTIDES_KEY`
 
-Export a [WorldTides](https://www.worldtides.info) API key to get station-grade tide extremes outside US (NOAA) coverage. Without it, non-US spots fall back to a manual-lookup note; nothing breaks.
+For station-grade extremes on chart datum (closer to printed local tables than EOT20's mean-sea-level heights), export a [WorldTides](https://www.worldtides.info) API key; it ranks above EOT20 when set. The free tier is limited, so EOT20 is the zero-cost default. Without either, non-US spots fall back to a manual-lookup note.
 
 ---
 

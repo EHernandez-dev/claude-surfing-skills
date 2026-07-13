@@ -67,6 +67,12 @@ _PLOT_H = _SVG_H - _PAD_T - _PAD_B
 # Curve resolution: one sample every 0.2 h across the 24 h axis.
 _SVG_SAMPLES = 120
 
+# Hourly strip: a band drawn below the tide plot (shares the 0-24 h x axis) that
+# shows per-hour swell, wind, period and quality for the target day's daylight
+# hours. Extends the viewBox height only; the tide plot geometry is unchanged.
+_STRIP_H = 116.0
+_STRIP_BAR_MAX = 42.0  # tallest swell bar, in px above its baseline
+
 
 # ---------------------------------------------------------------------------
 # Pure seams (unit-tested, no I/O, no wall-clock)
@@ -199,11 +205,19 @@ def _fmt_height(v: float) -> str:
     return f"{v:.1f}"
 
 
+def _fmt_label(v: float) -> str:
+    """Compact strip label: whole number when integral, else one decimal."""
+    return f"{v:.0f}" if float(v).is_integer() else f"{v:.1f}"
+
+
 def tide_svg(
     extremes: list[dict[str, Any]],
     windows: list[dict[str, Any]],
     daylight_row: dict[str, Any] | None,
     unit_label: str,
+    hours: list[dict[str, Any]] | None = None,
+    swell_unit: str = "m",
+    wind_unit: str = "kn",
 ) -> str:
     """Render the tide curve as an inline SVG string.
 
@@ -212,6 +226,11 @@ def tide_svg(
     labelled tide extremes, and 0-24 h / tide-unit axes. Colours are applied by
     CSS classes (not inline), so one SVG renders correctly in both light and
     dark mode. The y axis is scaled to the data and supports negative heights.
+
+    When `hours` is given (per-hour dicts with swell/wind/period/quality, as
+    produced by fetch_conditions' marine.days[].hours), an aligned strip is
+    drawn below the plot sharing the same x(hour) mapping, so each hour's swell
+    bar and wind arrow line up under the tide curve and session bands.
     """
     heights = [e["h"] for e in extremes]
     min_h, max_h = min(heights), max(heights)
@@ -219,39 +238,51 @@ def tide_svg(
     pad = rng * 0.15
     y_lo, y_hi = min_h - pad, max_h + pad
 
+    # X domain: dawn to evening glass-off (first_light..last_light) when the
+    # daylight row is known, so the chart spans only the surfable day instead of
+    # midnight-to-midnight; otherwise fall back to the full 0-24 h axis.
+    t0, t1 = 0.0, 24.0
+    if daylight_row and "first_light" in daylight_row and "last_light" in daylight_row:
+        try:
+            t0 = parse_hhmm(daylight_row["first_light"])
+            t1 = parse_hhmm(daylight_row["last_light"])
+        except (KeyError, ValueError):
+            t0, t1 = 0.0, 24.0
+    cropped = (t0, t1) != (0.0, 24.0)
+    span = (t1 - t0) or 24.0
+
     def x(hour: float) -> float:
-        return _PAD_L + (hour / 24.0) * _PLOT_W
+        return _PAD_L + ((hour - t0) / span) * _PLOT_W
 
     def y(height: float) -> float:
         return _PAD_T + (y_hi - height) / (y_hi - y_lo) * _PLOT_H
 
+    # Strip covers only the hours inside the plotted window so bars stay on-chart.
+    strip_hours = [
+        h for h in (hours or []) if h.get("time") and t0 <= int(h["time"][:2]) <= t1
+    ]
+    total_h = _SVG_H + _STRIP_H if strip_hours else _SVG_H
+
     parts: list[str] = [
-        f'<svg class="tide-chart" viewBox="0 0 {_fmt(_SVG_W)} {_fmt(_SVG_H)}" '
+        f'<svg class="tide-chart" viewBox="0 0 {_fmt(_SVG_W)} {_fmt(total_h)}" '
         f'preserveAspectRatio="xMidYMid meet" role="img" '
-        f'aria-label="Tide height across the day with shaded session windows">'
+        f'aria-label="Tide height across the day with shaded session windows'
+        f'{" and an hourly surf strip" if strip_hours else ""}">'
     ]
 
     plot_bottom = _PAD_T + _PLOT_H
 
-    # Night shading: everything outside first_light..last_light of the target day.
-    if daylight_row and "first_light" in daylight_row and "last_light" in daylight_row:
-        first_h = parse_hhmm(daylight_row["first_light"])
-        last_h = parse_hhmm(daylight_row["last_light"])
-        parts.append(
-            f'<rect class="tide-night" x="{_fmt(x(0))}" y="{_fmt(_PAD_T)}" '
-            f'width="{_fmt(x(first_h) - x(0))}" height="{_fmt(_PLOT_H)}" />'
-        )
-        parts.append(
-            f'<rect class="tide-night" x="{_fmt(x(last_h))}" y="{_fmt(_PAD_T)}" '
-            f'width="{_fmt(x(24) - x(last_h))}" height="{_fmt(_PLOT_H)}" />'
-        )
-
-    # Session windows: accent-shaded bands with a label along the top.
+    # Session windows: accent-shaded bands with a label along the top, clamped to
+    # the plotted window so a session running past dawn/dusk stays on-chart.
     for window in windows or []:
         try:
             wx0 = x(parse_hhmm(window["from"]))
             wx1 = x(parse_hhmm(window["to"]))
         except (KeyError, ValueError):
+            continue
+        wx0 = max(wx0, _PAD_L)
+        wx1 = min(wx1, _PAD_L + _PLOT_W)
+        if wx1 <= wx0:
             continue
         parts.append(
             f'<rect class="tide-window" x="{_fmt(wx0)}" y="{_fmt(_PAD_T)}" '
@@ -264,12 +295,20 @@ def tide_svg(
                 f'y="{_fmt(_PAD_T + 13)}" text-anchor="middle">{html.escape(str(label))}</text>'
             )
 
-    # Axes: baseline plus 3-hourly x ticks and evenly spaced y ticks.
+    # Axes: baseline, hourly x ticks inside the window, evenly spaced y ticks.
     parts.append(
         f'<line class="tide-axis" x1="{_fmt(_PAD_L)}" y1="{_fmt(plot_bottom)}" '
         f'x2="{_fmt(_PAD_L + _PLOT_W)}" y2="{_fmt(plot_bottom)}" />'
     )
-    for hour in range(0, 25, 3):
+    tick_step = 2 if span <= 13 else 3
+    start_tick = int(t0) if float(t0).is_integer() else int(t0) + 1
+    while start_tick % tick_step:
+        start_tick += 1
+    for hour in range(start_tick, int(t1) + 1, tick_step):
+        # Skip ticks hugging a cropped endpoint so their labels don't collide
+        # with the dawn/dusk time labels drawn below.
+        if cropped and (hour - t0 < 0.6 or t1 - hour < 0.6):
+            continue
         tx = x(hour)
         parts.append(
             f'<line class="tide-grid" x1="{_fmt(tx)}" y1="{_fmt(_PAD_T)}" '
@@ -278,6 +317,17 @@ def tide_svg(
         parts.append(
             f'<text class="tide-axis-label" x="{_fmt(tx)}" y="{_fmt(plot_bottom + 16)}" '
             f'text-anchor="middle">{hour:02d}</text>'
+        )
+    # Dawn / evening glass-off endpoints get their exact times at the axis ends.
+    if cropped:
+        parts.append(
+            f'<text class="tide-axis-label" x="{_fmt(_PAD_L)}" y="{_fmt(plot_bottom + 16)}" '
+            f'text-anchor="start">{html.escape(str(daylight_row["first_light"]))}</text>'
+        )
+        parts.append(
+            f'<text class="tide-axis-label" x="{_fmt(_PAD_L + _PLOT_W)}" '
+            f'y="{_fmt(plot_bottom + 16)}" '
+            f'text-anchor="end">{html.escape(str(daylight_row["last_light"]))}</text>'
         )
     for i in range(5):
         hv = y_lo + (y_hi - y_lo) * i / 4
@@ -291,10 +341,10 @@ def tide_svg(
         f'text-anchor="end">{html.escape(unit_label)}</text>'
     )
 
-    # The curve, sampled across the 24 h axis, plus a soft fill to the baseline.
+    # The curve, sampled across the plotted window, plus a soft fill to baseline.
     points = []
     for i in range(_SVG_SAMPLES + 1):
-        hour = 24.0 * i / _SVG_SAMPLES
+        hour = t0 + span * i / _SVG_SAMPLES
         points.append((x(hour), y(tide_height_at(hour, extremes))))
     line = " ".join(f"{_fmt(px)},{_fmt(py)}" for px, py in points)
     fill = (
@@ -305,9 +355,9 @@ def tide_svg(
     parts.append(f'<path class="tide-fill" d="{fill}" />')
     parts.append(f'<polyline class="tide-curve" points="{line}" />')
 
-    # Extremes: only real target-day events (within the 0-24 h window, labelled).
+    # Extremes: only real events inside the plotted window (dawn..dusk), labelled.
     for e in extremes:
-        if e["time"] is None or not (0.0 <= e["t"] <= 24.0):
+        if e["time"] is None or not (t0 <= e["t"] <= t1):
             continue
         ex, ey = x(e["t"]), y(e["h"])
         parts.append(f'<circle class="tide-dot" cx="{_fmt(ex)}" cy="{_fmt(ey)}" r="3.5" />')
@@ -322,6 +372,106 @@ def tide_svg(
         parts.append(
             f'<text class="tide-extreme-label" x="{_fmt(lx)}" y="{_fmt(ly)}" '
             f'text-anchor="{anchor}">{html.escape(label)}</text>'
+        )
+
+    # --- Hourly strip: aligned under the tide plot, same x(hour) mapping -----
+    if strip_hours:
+        strip_top = _SVG_H
+        bar_base = strip_top + 50.0     # swell bars grow upward from here
+        period_y = strip_top + 64.0     # period labels just under the baseline
+        wind_y = strip_top + 84.0       # wind arrow centres
+        wind_lbl_y = strip_top + 104.0  # wind speed labels
+
+        def _num(v: Any) -> float | None:
+            return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+        sw_vals = [s for s in (_num(h.get("swell_height")) for h in strip_hours) if s is not None]
+        sw_max = max(sw_vals) if sw_vals else 0.0
+        col_w = _PLOT_W / 24.0
+        bar_w = max(4.0, min(col_w * 0.55, 20.0))
+        # Per-hour numeric labels stay legible up to ~16 columns; above that
+        # (long summer daylight) show every other hour so text does not collide.
+        label_step = 1 if len(strip_hours) <= 16 else 2
+
+        parts.append(
+            f'<line class="strip-sep" x1="{_fmt(_PAD_L)}" y1="{_fmt(strip_top + 8)}" '
+            f'x2="{_fmt(_PAD_L + _PLOT_W)}" y2="{_fmt(strip_top + 8)}" />'
+        )
+        parts.append(
+            f'<text class="strip-row-label" x="{_fmt(_PAD_L - 8)}" y="{_fmt(bar_base - 14)}" '
+            f'text-anchor="end">Swell</text>'
+        )
+        parts.append(
+            f'<text class="strip-row-label" x="{_fmt(_PAD_L - 8)}" y="{_fmt(wind_y + 4)}" '
+            f'text-anchor="end">Wind</text>'
+        )
+
+        for idx, h in enumerate(strip_hours):
+            hr = int(h["time"][:2])
+            cx = x(hr)  # centre on the exact hour so bars align with tide ticks
+            show = idx % label_step == 0
+            sh = _num(h.get("swell_height"))
+            quality = h.get("quality")
+            rating = quality.get("rating") if isinstance(quality, dict) else None
+            qcls = {
+                "epic": "q-go", "good": "q-go", "fair": "q-check",
+                "poor": "q-skip", "flat": "q-flat",
+            }.get(rating, "q-none")
+
+            # Swell bar: height encodes swell size, colour encodes quality.
+            if sh is not None and sw_max > 0:
+                bh = max(2.0, (sh / sw_max) * _STRIP_BAR_MAX)
+                parts.append(
+                    f'<rect class="strip-bar {qcls}" x="{_fmt(cx - bar_w / 2)}" '
+                    f'y="{_fmt(bar_base - bh)}" width="{_fmt(bar_w)}" height="{_fmt(bh)}" rx="1.5" />'
+                )
+                if show:
+                    parts.append(
+                        f'<text class="strip-val" x="{_fmt(cx)}" y="{_fmt(bar_base - bh - 4)}" '
+                        f'text-anchor="middle">{_fmt_height(sh)}</text>'
+                    )
+
+            # Swell period, just below the baseline.
+            per = _num(h.get("swell_period_s"))
+            if per is not None and show:
+                parts.append(
+                    f'<text class="strip-sub" x="{_fmt(cx)}" y="{_fmt(period_y)}" '
+                    f'text-anchor="middle">{_fmt_label(per)}s</text>'
+                )
+
+            # Wind arrow points downwind (from-direction + 180), tinted by type.
+            wdeg = _num(h.get("wind_direction_deg"))
+            if wdeg is not None:
+                angle = (wdeg + 180.0) % 360.0
+                arrow = (
+                    f'M {_fmt(cx)},{_fmt(wind_y - 7)} L {_fmt(cx)},{_fmt(wind_y + 7)} '
+                    f'M {_fmt(cx)},{_fmt(wind_y - 7)} L {_fmt(cx - 3.5)},{_fmt(wind_y - 2)} '
+                    f'M {_fmt(cx)},{_fmt(wind_y - 7)} L {_fmt(cx + 3.5)},{_fmt(wind_y - 2)}'
+                )
+                wtype = h.get("wind_type")
+                wcls = (
+                    "wind-off" if wtype == "offshore"
+                    else "wind-on" if wtype == "onshore"
+                    else "wind-cross"
+                )
+                parts.append(
+                    f'<path class="strip-arrow {wcls}" d="{arrow}" '
+                    f'transform="rotate({_fmt(angle)} {_fmt(cx)} {_fmt(wind_y)})" />'
+                )
+            spd = _num(h.get("wind_speed"))
+            if spd is not None and show:
+                parts.append(
+                    f'<text class="strip-sub" x="{_fmt(cx)}" y="{_fmt(wind_lbl_y)}" '
+                    f'text-anchor="middle">{_fmt_label(spd)}</text>'
+                )
+
+        parts.append(
+            f'<text class="strip-unit" x="{_fmt(_PAD_L + _PLOT_W)}" y="{_fmt(period_y)}" '
+            f'text-anchor="end">period s · swell {html.escape(swell_unit)}</text>'
+        )
+        parts.append(
+            f'<text class="strip-unit" x="{_fmt(_PAD_L + _PLOT_W)}" y="{_fmt(wind_lbl_y)}" '
+            f'text-anchor="end">wind {html.escape(wind_unit)}</text>'
         )
 
     parts.append("</svg>")
@@ -379,7 +529,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
 }
-.wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px 48px; }
+.wrap { max-width: none; margin: 0; padding: 22px 4% 48px; }
 .hero { position: relative; height: 46vh; min-height: 320px; }
 #surf-map { position: absolute; inset: 0; background: #cfd8e0; }
 .overlay {
@@ -413,6 +563,20 @@ body {
 .tide-curve { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
 .tide-dot { fill: var(--accent); }
 .tide-extreme-label { fill: var(--ink); font-size: 11px; font-weight: 600; }
+.strip-sep { stroke: var(--border); stroke-width: 1; }
+.strip-row-label { fill: var(--muted); font-size: 11px; font-weight: 600; }
+.strip-val { fill: var(--ink); font-size: 10px; font-weight: 600; }
+.strip-sub { fill: var(--muted); font-size: 10px; }
+.strip-unit { fill: var(--muted); font-size: 9px; }
+.strip-bar.q-go { fill: var(--go); }
+.strip-bar.q-check { fill: var(--check); }
+.strip-bar.q-skip { fill: var(--skip); }
+.strip-bar.q-flat { fill: var(--muted); opacity: 0.5; }
+.strip-bar.q-none { fill: var(--accent); }
+.strip-arrow { fill: none; stroke-width: 1.6; stroke-linecap: round; }
+.strip-arrow.wind-off { stroke: var(--go); }
+.strip-arrow.wind-on { stroke: var(--skip); }
+.strip-arrow.wind-cross { stroke: var(--muted); }
 .tide-note { color: var(--muted); }
 .windows-list { list-style: none; padding: 0; margin: 12px 0 0; }
 .windows-list li { padding: 6px 0; border-top: 1px solid var(--border); }
@@ -616,8 +780,20 @@ def render(package: dict[str, Any]) -> str:
         datum_phrase = " (chart datum)" if datum == "CD" else f" ({datum})"
     tide_sub = f'<p class="sub">{esc(str(source))}</p>' if source else ""
 
+    # Hourly strip data for the target day. tide_svg clips it to the plotted
+    # window (dawn..dusk), so pass the full day's hours here.
+    target_hours: list[dict[str, Any]] = []
+    for md in conditions.get("marine", {}).get("days", []):
+        if md.get("date") == target_date:
+            target_hours = md.get("hours") or []
+            break
+    swell_unit = units.get("wave_height", "m")
+    wind_unit = units.get("wind_speed", "kn")
+
     if extremes:
-        tide_body = tide_svg(extremes, windows, daylight_row, tide_unit)
+        tide_body = tide_svg(
+            extremes, windows, daylight_row, tide_unit, target_hours, swell_unit, wind_unit
+        )
     else:
         note = tides.get("note") or "No automated tide data for this spot."
         items = "".join(

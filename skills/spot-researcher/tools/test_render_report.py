@@ -207,38 +207,39 @@ class TestTideSvg:
         assert "Evening glass-off" in svg
         assert svg.count('class="tide-window"') == 2
 
+    def _x_at(self, hour):
+        # x-mapping for the cropped dawn..dusk domain of the DAYLIGHT fixture
+        t0 = parse_hhmm(self.DAYLIGHT["first_light"])
+        t1 = parse_hhmm(self.DAYLIGHT["last_light"])
+        return render_report._PAD_L + ((hour - t0) / (t1 - t0)) * render_report._PLOT_W
+
     def test_window_rect_x_matches_from_time(self):
         svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
-        # dawn patrol starts at 07:00; compute its expected x with the module geometry
-        expected_x = render_report._PAD_L + (7.0 / 24.0) * render_report._PLOT_W
-        assert f'x="{expected_x:.2f}"' in svg
+        # dawn patrol starts at 07:00, positioned on the cropped domain
+        assert f'x="{self._x_at(7.0):.2f}"' in svg
 
-    def test_night_shading_matches_daylight(self):
+    def test_chart_cropped_to_daylight(self):
         svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
-        assert svg.count('class="tide-night"') == 2
-
-        def x_at(hour):
-            return render_report._PAD_L + (hour / 24.0) * render_report._PLOT_W
-
-        first_light = parse_hhmm(self.DAYLIGHT["first_light"])  # 06:12
-        last_light = parse_hhmm(self.DAYLIGHT["last_light"])  # 22:23
-        # pre-dawn rect spans midnight to first light
-        assert (
-            f'class="tide-night" x="{x_at(0):.2f}" y="{render_report._PAD_T:.2f}" '
-            f'width="{x_at(first_light) - x_at(0):.2f}"'
-        ) in svg
-        # post-dusk rect spans last light to midnight
-        assert (
-            f'class="tide-night" x="{x_at(last_light):.2f}" y="{render_report._PAD_T:.2f}" '
-            f'width="{x_at(24) - x_at(last_light):.2f}"'
-        ) in svg
+        # night shading is gone: the axis itself spans dawn..dusk now
+        assert 'class="tide-night"' not in svg
+        # dawn/dusk endpoint times label the axis ends
+        assert self.DAYLIGHT["first_light"] in svg
+        assert self.DAYLIGHT["last_light"] in svg
+        # the curve starts at the left edge (first_light) and ends at the right
+        left = render_report._PAD_L
+        right = render_report._PAD_L + render_report._PLOT_W
+        assert f'points="{left:.2f},' in svg
+        assert f' {right:.2f},' in svg
 
     def test_extreme_markers_labeled_with_unit(self):
         svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
-        assert "High 01:58 · 4.1 m" in svg
+        # 01:58 high is before dawn (06:12) so it is cropped out; daytime
+        # extremes remain, labelled with unit.
+        assert "High 01:58" not in svg
         assert "Low 08:14 · 0.9 m" in svg
-        # synthetic pads (time=None) are never labelled
-        assert svg.count('class="tide-dot"') == 4
+        assert "High 14:21 · 4.3 m" in svg
+        # three real daytime extremes; synthetic pads (time=None) never labelled
+        assert svg.count('class="tide-dot"') == 3
 
     def test_negative_heights_do_not_crash(self):
         extremes = [
@@ -248,6 +249,68 @@ class TestTideSvg:
         ]
         svg = tide_svg(extremes, [], None, "m")
         assert "<svg" in svg and "</svg>" in svg
+
+    HOURS = [
+        {"time": "07:00", "swell_height": 1.3, "swell_period_s": 12.0,
+         "swell_direction_deg": 315.0, "wind_speed": 8, "wind_direction_deg": 90.0,
+         "wind_type": "offshore", "quality": {"score": 7.2, "rating": "good"}},
+        {"time": "13:00", "swell_height": 1.5, "swell_period_s": 12.0,
+         "swell_direction_deg": 292.0, "wind_speed": 16, "wind_direction_deg": 225.0,
+         "wind_type": "cross-shore", "quality": {"score": 5.4, "rating": "fair"}},
+        {"time": "17:00", "swell_height": 1.2, "swell_period_s": 11.0,
+         "swell_direction_deg": 292.0, "wind_speed": 22, "wind_direction_deg": 247.0,
+         "wind_type": "onshore", "quality": {"score": 3.1, "rating": "poor"}},
+    ]
+
+    def test_no_strip_without_hours(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
+        assert "strip-bar" not in svg
+        assert (
+            f'viewBox="0 0 {render_report._SVG_W:.2f} {render_report._SVG_H:.2f}"' in svg
+        )
+
+    def test_strip_renders_bar_and_arrow_per_hour(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        assert svg.count('class="strip-bar') == 3
+        assert svg.count('class="strip-arrow') == 3
+        total = render_report._SVG_H + render_report._STRIP_H
+        assert f'viewBox="0 0 {render_report._SVG_W:.2f} {total:.2f}"' in svg
+
+    def test_strip_quality_and_wind_classes(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        assert "strip-bar q-go" in svg  # good rating
+        assert "strip-bar q-check" in svg  # fair rating
+        assert "strip-bar q-skip" in svg  # poor rating
+        assert "strip-arrow wind-off" in svg
+        assert "strip-arrow wind-on" in svg
+        assert "strip-arrow wind-cross" in svg
+
+    def test_strip_bar_aligns_with_hour_x(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        cx = self._x_at(7.0)  # 07:00 bar centres on the cropped domain
+        col_w = render_report._PLOT_W / 24.0
+        bar_w = max(4.0, min(col_w * 0.55, 20.0))
+        assert f'x="{cx - bar_w / 2:.2f}"' in svg
+
+    def test_strip_wind_arrow_points_downwind(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        # wind from 90 deg blows toward 270; arrow rotated by (90 + 180) % 360
+        cx = self._x_at(7.0)
+        assert f'rotate(270.00 {cx:.2f} ' in svg
+
+
+class TestHourlyStripInRender:
+    def test_clips_to_daylight_hours(self):
+        # Fixture marine day carries 24 hours; the chart spans dawn..dusk
+        # (06:12-22:23), so only hours 07..22 fall inside it: 16 bars.
+        html = render(load_package())
+        assert html.count('class="strip-bar') == 16
+
+    def test_strip_absent_without_marine_hours(self):
+        pkg = load_package()
+        pkg["conditions"]["marine"] = {"days": []}
+        # No SVG bars emitted (the CSS class definitions always exist).
+        assert 'class="strip-bar' not in render(pkg)
 
 
 # ---------------------------------------------------------------------------

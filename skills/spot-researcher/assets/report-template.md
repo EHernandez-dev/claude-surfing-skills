@@ -101,10 +101,22 @@ No buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and
 
 {If facing was not provided, wind_type is null: state that wind could not be classified offshore/onshore and give raw direction + speed only.}
 
+### Hour by hour ({target day})
+
+{The target day's hourly forecast from marine.days[<target day>].hours[], clipped to daylight hours (roughly first_light..last_light from the Daylight section). This is the hour-by-hour detail behind the tide chart's aligned strip. Read it alongside the tide highs/lows below: line each hour up against the tide state. Skip this table when the target day has no hours (e.g. marine unavailable).}
+
+| Time | Swell | Period | Wind | Quality |
+|------|-------|--------|------|---------|
+| {HH:MM} | {swell_height} {units.wave_height} from {swell_direction} | {swell_period_s}s | {wind_speed} {units.wind_speed} {wind_direction}, {wind_type} | {quality.rating} ({quality.score}/10) |
+
+{If facing was not provided, quality and wind_type are null: drop the Quality column and give raw wind direction + speed.}
+
 ### Tides
 
 {If tide data available:}
-Predictions from **{tides.source}**{if tides.station: , station **[{tides.station.name}]({tides.station.url})**{if tides.station.distance_km: ({tides.station.distance_km} km away)}}. Heights are {units.tide_height} relative to **{tides.datum}** ({"mean lower low water" for MLLW, "chart datum, as printed in local tide tables" for CD}).
+Predictions from **{tides.source}**{if tides.station: , station **[{tides.station.name}]({tides.station.url})**{if tides.station.distance_km: ({tides.station.distance_km} km away)}}. Heights are {units.tide_height} relative to **{tides.datum}** ({"mean lower low water" for MLLW, "chart datum, as printed in local tide tables" for CD, "mean sea level" for MSL}).
+
+{If tides.datum is MSL (EOT20 harmonic model): add one line noting heights are relative to mean sea level so they read differently from printed chart-datum tables (the timing of highs and lows is what matters), and that a global model is less exact in estuaries and rivermouths. If this spot is an estuary/rivermouth, lean on timing, not absolute height.}
 
 | Date | Highs | Lows |
 |------|-------|------|
@@ -268,7 +280,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 - Open-Meteo Marine (swell/wind/water temp forecast)
 - {buoy network + station {id} if available, e.g. "NOAA NDBC buoy 46026" or "Puertos del Estado buoy 1103"}
-- {tide source if available, e.g. "NOAA CO-OPS tides station {id}" or "WorldTides (chart datum)"}
+- {tide source if available, e.g. "NOAA CO-OPS tides station {id}", "WorldTides (chart datum)", or "EOT20 harmonic model (mean sea level)"}
 - {Surfline / Wannasurf / surf-forecast.com / Wikipedia / Reddit / webcams as consulted, each with URL}
 
 ## Post-Session
