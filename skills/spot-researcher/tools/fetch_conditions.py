@@ -30,12 +30,13 @@ Data sources:
 
 import json
 import math
+import math
 import os
 import re
 import sys
 import unicodedata
 import urllib.parse
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -98,6 +99,23 @@ TIDE_FALLBACK_NOTE = (
 )
 
 WORLDTIDES_MANUAL_NOTE = "Check https://www.tide-forecast.com manually."
+
+# EOT20: free global harmonic tide model (CC-BY 4.0), predicted offline via the
+# optional `pyTMD` dependency (ADR 0004). Needs a one-time ~2 GB model download
+# (download_tide_model.py) into EOT20_DIR, which must contain EOT20/ocean_tides/.
+# Heights are metres about mean sea level, so the datum is "MSL", not a chart
+# datum; for surf, the timing of the highs/lows is what the report leans on.
+EOT20_DIR_ENV = "EOT20_DIR"
+DEFAULT_EOT20_DIR = os.path.expanduser("~/.cache/claude-surfing-skills/tide_models")
+EOT20_SOURCE = "EOT20 (harmonic model)"
+EOT20_DATUM = "MSL"
+EOT20_SETUP_NOTE = (
+    "Free offline tides (EOT20) are not set up: install the optional dependency "
+    "(uv sync --extra tides) and run `uv run python download_tide_model.py`, "
+    "or check https://www.tide-forecast.com manually."
+)
+# 10-minute sampling resolves high/low times to within ~5 min of the true turn.
+EOT20_SAMPLE_MINUTES = 10
 
 COMPASS_POINTS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -691,24 +709,157 @@ def fetch_tides_worldtides(lat: float, lon: float, days: int, key: str) -> dict[
     return parse_worldtides_extremes(payload)
 
 
-def fetch_tides(lat: float, lon: float, days: int) -> dict[str, Any]:
+def fetch_tides(lat: float, lon: float, days: int, tz_name: str = "UTC") -> dict[str, Any]:
     """Tide source ladder: NOAA CO-OPS where it has a nearby station, then
-    WorldTides when WORLDTIDES_KEY is set, else the manual-fallback note.
+    WorldTides when WORLDTIDES_KEY is set, then the free offline EOT20 harmonic
+    model when its files are installed, else the manual-fallback note.
+
+    WorldTides ranks above EOT20 deliberately: a user who set a key opted into
+    paid station-grade extremes on a chart datum, which read closer to the
+    printed local tables than EOT20's mean-sea-level harmonic prediction. Without
+    a key, EOT20 is the free keyless fallback that covers the whole globe (ADR 0004).
     """
     noaa = fetch_tides_noaa(lat, lon, days)
     if "error" not in noaa:
         return noaa
+    errors = [f"NOAA CO-OPS: {noaa['error']}"]
 
     key = os.environ.get("WORLDTIDES_KEY")
-    if not key:
-        return noaa
+    if key:
+        worldtides = fetch_tides_worldtides(lat, lon, days, key)
+        if "error" not in worldtides:
+            return worldtides
+        errors.append(f"WorldTides: {worldtides['error']}")
 
-    worldtides = fetch_tides_worldtides(lat, lon, days, key)
-    if "error" not in worldtides:
-        return worldtides
+    harmonic = fetch_tides_harmonic(lat, lon, days, tz_name)
+    if "error" not in harmonic:
+        return harmonic
+    errors.append(f"EOT20: {harmonic['error']}")
+
     return {
-        "error": f"NOAA CO-OPS: {noaa['error']}; {worldtides['error']}",
-        "note": worldtides.get("note", WORLDTIDES_MANUAL_NOTE),
+        "error": "; ".join(errors),
+        "note": harmonic.get("note", EOT20_SETUP_NOTE),
+    }
+
+
+def find_tide_extremes(
+    times: list[datetime], heights_m: list[float]
+) -> list[dict[str, Any]]:
+    """Reduce a densely-sampled tide elevation series to its high/low turning points.
+
+    `times` are local datetimes in ascending order and `heights_m` the predicted
+    elevation in metres at each. Returns one event per local extremum, in order:
+    ``{"date": "YYYY-MM-DD", "time": "HH:MM", "height_m": float, "type": "high"|"low"}``,
+    detected where the slope changes sign. A turning point needs a neighbour on
+    each side, so the first and last samples are never reported; sample finely
+    enough (every ~10 min) that no extreme is missed. Flats are handled by
+    requiring a strict change on one side, so a plateau yields a single event.
+    """
+    events: list[dict[str, Any]] = []
+    for i in range(1, len(heights_m) - 1):
+        prev, cur, nxt = heights_m[i - 1], heights_m[i], heights_m[i + 1]
+        if cur >= prev and cur > nxt:
+            kind = "high"
+        elif cur <= prev and cur < nxt:
+            kind = "low"
+        else:
+            continue
+        when = times[i]
+        events.append(
+            {
+                "date": when.strftime("%Y-%m-%d"),
+                "time": when.strftime("%H:%M"),
+                "height_m": round(float(cur), 2),
+                "type": kind,
+            }
+        )
+    return events
+
+
+def _predict_tide_series(
+    lat: float, lon: float, local_times: list[datetime], model_dir: str
+) -> list[float]:
+    """Predict EOT20 tide elevation (metres about MSL) at one point for a list of
+    timezone-aware local datetimes. This is the only pyTMD/numpy-touching step,
+    isolated so the orchestration around it stays testable without the optional
+    scientific stack or the 2 GB model files installed (tests monkeypatch this).
+
+    `extrapolate=True`: surf spots sit on the coast (Plentzia is a rivermouth),
+    which the 1/8 deg grid may mask; extrapolation snaps to the nearest ocean
+    cell rather than returning NaN, trading a little accuracy for a usable curve.
+    """
+    import numpy as np
+    import pyTMD
+
+    times_utc = np.array(
+        [t.astimezone(timezone.utc).replace(tzinfo=None) for t in local_times],
+        dtype="datetime64[s]",
+    )
+    # EOT20 uses lon_wrap=180, so normalise to -180..180.
+    lon_wrapped = ((float(lon) + 180.0) % 360.0) - 180.0
+    darr = pyTMD.compute.tide_elevations(
+        lon_wrapped,
+        float(lat),
+        times_utc,
+        directory=model_dir,
+        model="EOT20",
+        crs="4326",
+        standard="datetime",
+        method="linear",
+        extrapolate=True,
+        cutoff=25.0,
+        infer_minor=True,
+    )
+    return [float(v) for v in np.asarray(darr.values, dtype="float64").ravel()]
+
+
+def fetch_tides_harmonic(
+    lat: float, lon: float, days: int, tz_name: str = "UTC"
+) -> dict[str, Any]:
+    """Predict tides from the free EOT20 global harmonic model, computed locally
+    (no key, no network). Heights are metres about mean sea level (datum "MSL").
+
+    Requires the optional `pyTMD` dependency and the EOT20 constituent files under
+    EOT20_DIR (see download_tide_model.py). Absent either, or if the point falls
+    off the model grid, returns the standard gap shape with a setup note - never
+    raises, per the tool contract.
+    """
+    model_dir = os.environ.get(EOT20_DIR_ENV) or DEFAULT_EOT20_DIR
+    if not os.path.isdir(os.path.join(model_dir, "EOT20", "ocean_tides")):
+        return {"error": f"EOT20 model files not found in {model_dir}", "note": EOT20_SETUP_NOTE}
+
+    try:
+        tz = ZoneInfo(tz_name)
+        start_local = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+        step = timedelta(minutes=EOT20_SAMPLE_MINUTES)
+        n = int(days * 24 * 60 / EOT20_SAMPLE_MINUTES)
+        local_times = [start_local + step * k for k in range(n + 1)]
+
+        heights = list(_predict_tide_series(lat, lon, local_times, model_dir))
+        if not heights or all(math.isnan(h) for h in heights):
+            return {
+                "error": "EOT20 returned no data for this point (off-grid)",
+                "note": WORLDTIDES_MANUAL_NOTE,
+            }
+
+        extremes = find_tide_extremes(local_times, heights)
+    except ImportError as e:
+        return {"error": f"optional tide support not installed ({e})", "note": EOT20_SETUP_NOTE}
+    except Exception as e:  # never hard-fail: degrade to the manual note
+        return {"error": f"EOT20 prediction failed: {e}", "note": WORLDTIDES_MANUAL_NOTE}
+
+    if not extremes:
+        return {"error": "EOT20 produced no tide extremes", "note": WORLDTIDES_MANUAL_NOTE}
+
+    days_out: dict[str, list[dict[str, Any]]] = {}
+    for e in extremes:
+        days_out.setdefault(e["date"], []).append(
+            {"time": e["time"], "height_m": e["height_m"], "type": e["type"]}
+        )
+    return {
+        "source": EOT20_SOURCE,
+        "datum": EOT20_DATUM,
+        "days": [{"date": d, "events": evs} for d, evs in sorted(days_out.items())],
     }
 
 
@@ -1543,12 +1694,15 @@ def cli(
     else:
         buoy = fetch_buoy(lat, lon)
 
+    # Resolve the spot timezone first: the EOT20 tide rung needs it to report
+    # highs/lows in local time (NOAA/WorldTides already return local times).
+    tz_name = report_marine.get("timezone") or wind_raw.get("timezone") or "UTC"
+
     if tide_station:
         tides = _fetch_tide_predictions(str(tide_station), days)
     else:
-        tides = fetch_tides(lat, lon, days)
+        tides = fetch_tides(lat, lon, days, tz_name)
 
-    tz_name = report_marine.get("timezone") or wind_raw.get("timezone") or "UTC"
     daylight = fetch_daylight(lat, lon, tz_name, days)
 
     marine_days = build_marine_days(report_marine, wind_raw, facing, units)

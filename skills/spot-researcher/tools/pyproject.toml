@@ -11,6 +11,18 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+# Optional: free offline tide prediction from the EOT20 global harmonic model
+# (ADR 0004). Kept out of the base install because pyTMD pulls a scientific
+# stack (numpy/scipy/pyproj/xarray/...) and needs a one-time ~2 GB model
+# download. Enable with `uv sync --extra tides`.
+# pyTMD needs two companions that it does not pull in transitively: h5py (its
+# h5netcdf reader opens EOT20's NETCDF4/HDF5 constituent files through the HDF5
+# backend) and dask (xarray resolves a dask chunk manager when pyTMD opens the
+# constituent atlases). Both were found necessary verifying an end-to-end EOT20
+# prediction; the signature alone did not reveal them.
+[project.optional-dependencies]
+tides = ["pyTMD>=3.0.0", "h5py>=3.0", "dask>=2023.1"]
+
 [dependency-groups]
 dev = ["pytest>=8.0.0"]
 

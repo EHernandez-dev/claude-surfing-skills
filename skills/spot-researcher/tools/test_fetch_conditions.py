@@ -6,8 +6,9 @@ with RUN_INTEGRATION_TESTS=1.
 """
 
 import json
+import math
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -495,10 +496,56 @@ class TestParseWorldtidesExtremes:
         assert tides["days"], "extremes must still parse without a named station"
 
 
+class TestFindTideExtremes:
+    def _series(self, amp=2.0, period_h=12.42, hours=24, step_min=10):
+        # A clean semidiurnal cosine starting at high water (t=0).
+        start = datetime(2026, 7, 13, 0, 0)
+        times, heights = [], []
+        n = int(hours * 60 / step_min)
+        for k in range(n + 1):
+            t_h = k * step_min / 60.0
+            times.append(start + timedelta(minutes=step_min * k))
+            heights.append(amp * math.cos(2 * math.pi * t_h / period_h))
+        return times, heights
+
+    def test_semidiurnal_turning_points(self):
+        events = fetch_conditions.find_tide_extremes(*self._series())
+        # cos peaks at t=0 and t=24.84h (both endpoints, excluded); interior
+        # extrema are low ~6.21h, high ~12.42h, low ~18.63h.
+        assert [e["type"] for e in events] == ["low", "high", "low"]
+        assert events[0]["time"].startswith("06:")
+        assert events[1]["time"].startswith("12:")
+        assert events[2]["time"].startswith("18:")
+        assert events[1]["height_m"] == pytest.approx(2.0, abs=0.02)
+        assert events[0]["height_m"] == pytest.approx(-2.0, abs=0.02)
+        assert all(e["date"] == "2026-07-13" for e in events)
+
+    def test_monotonic_series_has_no_extremes(self):
+        start = datetime(2026, 7, 13, 0, 0)
+        times = [start + timedelta(hours=k) for k in range(5)]
+        assert fetch_conditions.find_tide_extremes(times, [1.0, 2.0, 3.0, 4.0, 5.0]) == []
+
+    def test_single_peak(self):
+        start = datetime(2026, 7, 13, 3, 0)
+        times = [start + timedelta(hours=k) for k in range(5)]
+        events = fetch_conditions.find_tide_extremes(times, [0.0, 1.0, 2.0, 1.0, 0.0])
+        assert len(events) == 1
+        assert events[0]["type"] == "high"
+        assert events[0]["height_m"] == 2.0
+        assert events[0]["time"] == "05:00"
+
+    def test_plateau_counts_once(self):
+        start = datetime(2026, 7, 13, 0, 0)
+        times = [start + timedelta(hours=k) for k in range(5)]
+        events = fetch_conditions.find_tide_extremes(times, [0.0, 2.0, 2.0, 1.0, 0.0])
+        assert [e["type"] for e in events] == ["high"]
+
+
 class TestTideSourceLadder:
-    """NOAA CO-OPS stays primary where it has a station; WorldTides steps in
-    only when NOAA gaps out AND WORLDTIDES_KEY is set; no key degrades to the
-    manual-fallback note (ADR 0001)."""
+    """NOAA CO-OPS stays primary where it has a station; WorldTides steps in only
+    when NOAA gaps out AND WORLDTIDES_KEY is set; otherwise the free offline EOT20
+    harmonic rung fills the gap, and if that is unavailable too the ladder degrades
+    to the manual-fallback note (ADR 0001, ADR 0004)."""
 
     NOAA_OK = {
         "source": "NOAA CO-OPS",
@@ -512,26 +559,46 @@ class TestTideSourceLadder:
         "datum": "CD",
         "days": [{"date": "2026-07-10", "events": [{"time": "04:12", "height_m": 4.1, "type": "high"}]}],
     }
+    HARMONIC_OK = {
+        "source": "EOT20 (harmonic model)",
+        "datum": "MSL",
+        "days": [{"date": "2026-07-10", "events": [{"time": "05:20", "height_m": -1.4, "type": "low"}]}],
+    }
+    HARMONIC_GAP = {"error": "EOT20 model files not found", "note": fetch_conditions.EOT20_SETUP_NOTE}
+
+    def _patch(self, monkeypatch, *, noaa, worldtides=None, harmonic=None):
+        """Wire the three rungs; a rung left None fails loudly if the ladder
+        reaches it, so each test asserts exactly how far down it should get."""
+        calls = {"wt": 0, "harm": 0}
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: noaa)
+
+        def _wt(lat, lon, days, key):
+            calls["wt"] += 1
+            if worldtides is None:
+                pytest.fail("WorldTides must not be reached in this case")
+            return worldtides
+
+        def _harm(lat, lon, days, tz_name="UTC"):
+            calls["harm"] += 1
+            if harmonic is None:
+                pytest.fail("EOT20 harmonic must not be reached in this case")
+            return harmonic
+
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_worldtides", _wt)
+        monkeypatch.setattr(fetch_conditions, "fetch_tides_harmonic", _harm)
+        return calls
 
     def test_noaa_primary_even_with_key_set(self, monkeypatch):
-        calls = []
         monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
-        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_OK)
-        monkeypatch.setattr(
-            fetch_conditions,
-            "fetch_tides_worldtides",
-            lambda lat, lon, days, key: calls.append("wt") or self.WORLDTIDES_OK,
-        )
+        calls = self._patch(monkeypatch, noaa=self.NOAA_OK)
         assert fetch_conditions.fetch_tides(43.4, -2.7, 2) == self.NOAA_OK
-        assert calls == [], "WorldTides must not be polled when NOAA delivers"
+        assert calls == {"wt": 0, "harm": 0}, "no fallback runs when NOAA delivers"
 
     def test_worldtides_when_noaa_gaps_and_key_set(self, monkeypatch):
         monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
-        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
-        monkeypatch.setattr(
-            fetch_conditions, "fetch_tides_worldtides", lambda lat, lon, days, key: self.WORLDTIDES_OK
-        )
+        calls = self._patch(monkeypatch, noaa=self.NOAA_GAP, worldtides=self.WORLDTIDES_OK)
         assert fetch_conditions.fetch_tides(43.4, -2.7, 2) == self.WORLDTIDES_OK
+        assert calls["harm"] == 0, "harmonic must not run once WorldTides delivers"
 
     def test_key_passed_from_environment(self, monkeypatch):
         seen = []
@@ -545,30 +612,101 @@ class TestTideSourceLadder:
         fetch_conditions.fetch_tides(43.4, -2.7, 2)
         assert seen == ["sekret123"]
 
-    def test_no_key_degrades_to_manual_note(self, monkeypatch):
+    def test_harmonic_when_noaa_gaps_and_no_key(self, monkeypatch):
+        monkeypatch.delenv("WORLDTIDES_KEY", raising=False)
+        calls = self._patch(monkeypatch, noaa=self.NOAA_GAP, harmonic=self.HARMONIC_OK)
+        assert fetch_conditions.fetch_tides(43.4, -2.7, 2) == self.HARMONIC_OK
+        assert calls["wt"] == 0, "WorldTides must not run without a key"
+        assert calls["harm"] == 1
+
+    def test_harmonic_when_worldtides_fails(self, monkeypatch):
+        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
+        calls = self._patch(
+            monkeypatch,
+            noaa=self.NOAA_GAP,
+            worldtides={"error": "WorldTides request failed", "note": "n"},
+            harmonic=self.HARMONIC_OK,
+        )
+        assert fetch_conditions.fetch_tides(43.4, -2.7, 2) == self.HARMONIC_OK
+        assert calls == {"wt": 1, "harm": 1}
+
+    def test_tz_name_passed_to_harmonic(self, monkeypatch):
+        seen = []
         monkeypatch.delenv("WORLDTIDES_KEY", raising=False)
         monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
         monkeypatch.setattr(
             fetch_conditions,
-            "fetch_tides_worldtides",
-            lambda lat, lon, days, key: pytest.fail("WorldTides must not be called without a key"),
+            "fetch_tides_harmonic",
+            lambda lat, lon, days, tz_name="UTC": seen.append(tz_name) or self.HARMONIC_OK,
+        )
+        fetch_conditions.fetch_tides(43.4, -2.7, 2, "Europe/Madrid")
+        assert seen == ["Europe/Madrid"]
+
+    def test_all_sources_failing_aggregates_errors(self, monkeypatch):
+        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
+        self._patch(
+            monkeypatch,
+            noaa=self.NOAA_GAP,
+            worldtides={"error": "WorldTides request failed", "note": "n"},
+            harmonic=self.HARMONIC_GAP,
         )
         result = fetch_conditions.fetch_tides(43.4, -2.7, 2)
-        assert result["error"] == self.NOAA_GAP["error"]
-        assert "WORLDTIDES_KEY" in result["note"]
+        assert "5000 km away" in result["error"]
+        assert "WorldTides request failed" in result["error"]
+        assert "EOT20" in result["error"]
         assert "tide-forecast.com" in result["note"]
 
-    def test_both_sources_failing_aggregates_errors(self, monkeypatch):
-        monkeypatch.setenv("WORLDTIDES_KEY", "sekret123")
-        monkeypatch.setattr(fetch_conditions, "fetch_tides_noaa", lambda lat, lon, days: self.NOAA_GAP)
+
+class TestFetchTidesHarmonic:
+    def _install_fake_model(self, tmp_path, monkeypatch):
+        ocean = tmp_path / "EOT20" / "ocean_tides"
+        ocean.mkdir(parents=True)
+        (ocean / "M2_ocean_eot20.nc").write_bytes(b"stub")
+        monkeypatch.setenv("EOT20_DIR", str(tmp_path))
+
+    def test_missing_model_files_returns_gap(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EOT20_DIR", str(tmp_path))  # empty: no EOT20/ocean_tides
+        result = fetch_conditions.fetch_tides_harmonic(43.4, -2.7, 2, "Europe/Madrid")
+        assert "not found" in result["error"]
+        assert "tide-forecast.com" in result["note"]
+
+    def test_success_shape_from_predicted_series(self, monkeypatch, tmp_path):
+        self._install_fake_model(tmp_path, monkeypatch)
+
+        def fake_predict(lat, lon, local_times, model_dir):
+            # clean semidiurnal cosine about MSL, 10-min cadence
+            return [2.0 * math.cos(2 * math.pi * i * 10 / 60 / 12.42) for i in range(len(local_times))]
+
+        monkeypatch.setattr(fetch_conditions, "_predict_tide_series", fake_predict)
+        result = fetch_conditions.fetch_tides_harmonic(43.4, -2.7, 1, "Europe/Madrid")
+        assert result["source"] == "EOT20 (harmonic model)"
+        assert result["datum"] == "MSL"
+        assert result["days"], "expected at least one day of extremes"
+        event = result["days"][0]["events"][0]
+        assert set(event) == {"time", "height_m", "type"}
+        assert event["type"] in ("high", "low")
+
+    def test_all_nan_prediction_returns_gap(self, monkeypatch, tmp_path):
+        self._install_fake_model(tmp_path, monkeypatch)
         monkeypatch.setattr(
             fetch_conditions,
-            "fetch_tides_worldtides",
-            lambda lat, lon, days, key: {"error": "WorldTides request failed", "note": "n"},
+            "_predict_tide_series",
+            lambda lat, lon, local_times, model_dir: [float("nan")] * len(local_times),
         )
-        result = fetch_conditions.fetch_tides(43.4, -2.7, 2)
-        assert "5000 km away" in result["error"] and "WorldTides request failed" in result["error"]
-        assert result["note"], "degradation contract requires a manual-fallback note"
+        result = fetch_conditions.fetch_tides_harmonic(43.4, -2.7, 1, "Europe/Madrid")
+        assert "off-grid" in result["error"]
+        assert "tide-forecast.com" in result["note"]
+
+    def test_import_error_reports_setup(self, monkeypatch, tmp_path):
+        self._install_fake_model(tmp_path, monkeypatch)
+
+        def boom(lat, lon, local_times, model_dir):
+            raise ImportError("No module named 'pyTMD'")
+
+        monkeypatch.setattr(fetch_conditions, "_predict_tide_series", boom)
+        result = fetch_conditions.fetch_tides_harmonic(43.4, -2.7, 1, "Europe/Madrid")
+        assert "pyTMD" in result["error"]
+        assert "uv sync --extra tides" in result["note"]
 
 
 class TestWorldtidesKeySafety:
@@ -771,7 +909,7 @@ def patched_fetchers(monkeypatch):
     monkeypatch.setattr(fetch_conditions, "fetch_marine", lambda lat, lon, days: MARINE_RAW)
     monkeypatch.setattr(fetch_conditions, "fetch_wind_weather", lambda lat, lon, days: WIND_RAW)
     monkeypatch.setattr(fetch_conditions, "fetch_buoy", lambda lat, lon: BUOY_SI)
-    monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days: TIDES_SI)
+    monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days, tz_name="UTC": TIDES_SI)
     monkeypatch.setattr(fetch_conditions, "fetch_daylight", lambda lat, lon, tz, days: DAYLIGHT)
 
 
@@ -848,7 +986,7 @@ class TestCliUnitsContract:
         assert "swell_height" in data["surf_windows"][0]
 
     def test_worldtides_shape_converts_and_echoes_datum(self, patched_fetchers, monkeypatch):
-        monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days: WORLDTIDES_SI)
+        monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days, tz_name="UTC": WORLDTIDES_SI)
         metric = run_cli()
         assert metric["tides"]["source"] == "WorldTides"
         assert metric["tides"]["datum"] == "CD"
@@ -912,7 +1050,7 @@ class TestCliReportNaming:
         monkeypatch.setattr(fetch_conditions, "fetch_marine", lambda lat, lon, days: error)
         monkeypatch.setattr(fetch_conditions, "fetch_wind_weather", lambda lat, lon, days: error)
         monkeypatch.setattr(fetch_conditions, "fetch_buoy", lambda lat, lon: error)
-        monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days: error)
+        monkeypatch.setattr(fetch_conditions, "fetch_tides", lambda lat, lon, days, tz_name="UTC": error)
         monkeypatch.setattr(fetch_conditions, "fetch_daylight", lambda lat, lon, tz, days: error)
         data = run_cli()
         assert data["report"]["target_date"] is None
@@ -1148,7 +1286,7 @@ class TestCliSpotFile:
             lambda station_id, days: seen.update(station=station_id) or TIDES_SI,
         )
         monkeypatch.setattr(
-            fetch_conditions, "fetch_tides", lambda lat, lon, days: pytest.fail("ladder must be skipped")
+            fetch_conditions, "fetch_tides", lambda lat, lon, days, tz_name="UTC": pytest.fail("ladder must be skipped")
         )
         result = invoke_cli("--spot-file", str(path))
         assert result.exit_code == 0, result.output

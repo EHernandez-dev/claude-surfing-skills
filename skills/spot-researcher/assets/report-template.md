@@ -114,7 +114,9 @@ No buoy is reporting nearby ({buoy.error}). Rely on the model forecast below and
 ### Tides
 
 {If tide data available:}
-Predictions from **{tides.source}**{if tides.station: , station **[{tides.station.name}]({tides.station.url})**{if tides.station.distance_km: ({tides.station.distance_km} km away)}}. Heights are {units.tide_height} relative to **{tides.datum}** ({"mean lower low water" for MLLW, "chart datum, as printed in local tide tables" for CD}).
+Predictions from **{tides.source}**{if tides.station: , station **[{tides.station.name}]({tides.station.url})**{if tides.station.distance_km: ({tides.station.distance_km} km away)}}. Heights are {units.tide_height} relative to **{tides.datum}** ({"mean lower low water" for MLLW, "chart datum, as printed in local tide tables" for CD, "mean sea level" for MSL}).
+
+{If tides.datum is MSL (EOT20 harmonic model): add one line noting heights are relative to mean sea level so they read differently from printed chart-datum tables (the timing of highs and lows is what matters), and that a global model is less exact in estuaries and rivermouths. If this spot is an estuary/rivermouth, lean on timing, not absolute height.}
 
 | Date | Highs | Lows |
 |------|-------|------|
@@ -278,7 +280,7 @@ As of {date}, {statement}. Source: [{source name}]({url}).
 
 - Open-Meteo Marine (swell/wind/water temp forecast)
 - {buoy network + station {id} if available, e.g. "NOAA NDBC buoy 46026" or "Puertos del Estado buoy 1103"}
-- {tide source if available, e.g. "NOAA CO-OPS tides station {id}" or "WorldTides (chart datum)"}
+- {tide source if available, e.g. "NOAA CO-OPS tides station {id}", "WorldTides (chart datum)", or "EOT20 harmonic model (mean sea level)"}
 - {Surfline / Wannasurf / surf-forecast.com / Wikipedia / Reddit / webcams as consulted, each with URL}
 
 ## Post-Session

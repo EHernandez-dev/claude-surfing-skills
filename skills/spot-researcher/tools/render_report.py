@@ -238,13 +238,29 @@ def tide_svg(
     pad = rng * 0.15
     y_lo, y_hi = min_h - pad, max_h + pad
 
+    # X domain: dawn to evening glass-off (first_light..last_light) when the
+    # daylight row is known, so the chart spans only the surfable day instead of
+    # midnight-to-midnight; otherwise fall back to the full 0-24 h axis.
+    t0, t1 = 0.0, 24.0
+    if daylight_row and "first_light" in daylight_row and "last_light" in daylight_row:
+        try:
+            t0 = parse_hhmm(daylight_row["first_light"])
+            t1 = parse_hhmm(daylight_row["last_light"])
+        except (KeyError, ValueError):
+            t0, t1 = 0.0, 24.0
+    cropped = (t0, t1) != (0.0, 24.0)
+    span = (t1 - t0) or 24.0
+
     def x(hour: float) -> float:
-        return _PAD_L + (hour / 24.0) * _PLOT_W
+        return _PAD_L + ((hour - t0) / span) * _PLOT_W
 
     def y(height: float) -> float:
         return _PAD_T + (y_hi - height) / (y_hi - y_lo) * _PLOT_H
 
-    strip_hours = [h for h in (hours or []) if h.get("time")]
+    # Strip covers only the hours inside the plotted window so bars stay on-chart.
+    strip_hours = [
+        h for h in (hours or []) if h.get("time") and t0 <= int(h["time"][:2]) <= t1
+    ]
     total_h = _SVG_H + _STRIP_H if strip_hours else _SVG_H
 
     parts: list[str] = [
@@ -256,25 +272,17 @@ def tide_svg(
 
     plot_bottom = _PAD_T + _PLOT_H
 
-    # Night shading: everything outside first_light..last_light of the target day.
-    if daylight_row and "first_light" in daylight_row and "last_light" in daylight_row:
-        first_h = parse_hhmm(daylight_row["first_light"])
-        last_h = parse_hhmm(daylight_row["last_light"])
-        parts.append(
-            f'<rect class="tide-night" x="{_fmt(x(0))}" y="{_fmt(_PAD_T)}" '
-            f'width="{_fmt(x(first_h) - x(0))}" height="{_fmt(_PLOT_H)}" />'
-        )
-        parts.append(
-            f'<rect class="tide-night" x="{_fmt(x(last_h))}" y="{_fmt(_PAD_T)}" '
-            f'width="{_fmt(x(24) - x(last_h))}" height="{_fmt(_PLOT_H)}" />'
-        )
-
-    # Session windows: accent-shaded bands with a label along the top.
+    # Session windows: accent-shaded bands with a label along the top, clamped to
+    # the plotted window so a session running past dawn/dusk stays on-chart.
     for window in windows or []:
         try:
             wx0 = x(parse_hhmm(window["from"]))
             wx1 = x(parse_hhmm(window["to"]))
         except (KeyError, ValueError):
+            continue
+        wx0 = max(wx0, _PAD_L)
+        wx1 = min(wx1, _PAD_L + _PLOT_W)
+        if wx1 <= wx0:
             continue
         parts.append(
             f'<rect class="tide-window" x="{_fmt(wx0)}" y="{_fmt(_PAD_T)}" '
@@ -287,12 +295,20 @@ def tide_svg(
                 f'y="{_fmt(_PAD_T + 13)}" text-anchor="middle">{html.escape(str(label))}</text>'
             )
 
-    # Axes: baseline plus 3-hourly x ticks and evenly spaced y ticks.
+    # Axes: baseline, hourly x ticks inside the window, evenly spaced y ticks.
     parts.append(
         f'<line class="tide-axis" x1="{_fmt(_PAD_L)}" y1="{_fmt(plot_bottom)}" '
         f'x2="{_fmt(_PAD_L + _PLOT_W)}" y2="{_fmt(plot_bottom)}" />'
     )
-    for hour in range(0, 25, 3):
+    tick_step = 2 if span <= 13 else 3
+    start_tick = int(t0) if float(t0).is_integer() else int(t0) + 1
+    while start_tick % tick_step:
+        start_tick += 1
+    for hour in range(start_tick, int(t1) + 1, tick_step):
+        # Skip ticks hugging a cropped endpoint so their labels don't collide
+        # with the dawn/dusk time labels drawn below.
+        if cropped and (hour - t0 < 0.6 or t1 - hour < 0.6):
+            continue
         tx = x(hour)
         parts.append(
             f'<line class="tide-grid" x1="{_fmt(tx)}" y1="{_fmt(_PAD_T)}" '
@@ -301,6 +317,17 @@ def tide_svg(
         parts.append(
             f'<text class="tide-axis-label" x="{_fmt(tx)}" y="{_fmt(plot_bottom + 16)}" '
             f'text-anchor="middle">{hour:02d}</text>'
+        )
+    # Dawn / evening glass-off endpoints get their exact times at the axis ends.
+    if cropped:
+        parts.append(
+            f'<text class="tide-axis-label" x="{_fmt(_PAD_L)}" y="{_fmt(plot_bottom + 16)}" '
+            f'text-anchor="start">{html.escape(str(daylight_row["first_light"]))}</text>'
+        )
+        parts.append(
+            f'<text class="tide-axis-label" x="{_fmt(_PAD_L + _PLOT_W)}" '
+            f'y="{_fmt(plot_bottom + 16)}" '
+            f'text-anchor="end">{html.escape(str(daylight_row["last_light"]))}</text>'
         )
     for i in range(5):
         hv = y_lo + (y_hi - y_lo) * i / 4
@@ -314,10 +341,10 @@ def tide_svg(
         f'text-anchor="end">{html.escape(unit_label)}</text>'
     )
 
-    # The curve, sampled across the 24 h axis, plus a soft fill to the baseline.
+    # The curve, sampled across the plotted window, plus a soft fill to baseline.
     points = []
     for i in range(_SVG_SAMPLES + 1):
-        hour = 24.0 * i / _SVG_SAMPLES
+        hour = t0 + span * i / _SVG_SAMPLES
         points.append((x(hour), y(tide_height_at(hour, extremes))))
     line = " ".join(f"{_fmt(px)},{_fmt(py)}" for px, py in points)
     fill = (
@@ -328,9 +355,9 @@ def tide_svg(
     parts.append(f'<path class="tide-fill" d="{fill}" />')
     parts.append(f'<polyline class="tide-curve" points="{line}" />')
 
-    # Extremes: only real target-day events (within the 0-24 h window, labelled).
+    # Extremes: only real events inside the plotted window (dawn..dusk), labelled.
     for e in extremes:
-        if e["time"] is None or not (0.0 <= e["t"] <= 24.0):
+        if e["time"] is None or not (t0 <= e["t"] <= t1):
             continue
         ex, ey = x(e["t"]), y(e["h"])
         parts.append(f'<circle class="tide-dot" cx="{_fmt(ex)}" cy="{_fmt(ey)}" r="3.5" />')
@@ -502,7 +529,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
 }
-.wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px 48px; }
+.wrap { max-width: none; margin: 0; padding: 22px 4% 48px; }
 .hero { position: relative; height: 46vh; min-height: 320px; }
 #surf-map { position: absolute; inset: 0; background: #cfd8e0; }
 .overlay {
@@ -753,20 +780,13 @@ def render(package: dict[str, Any]) -> str:
         datum_phrase = " (chart datum)" if datum == "CD" else f" ({datum})"
     tide_sub = f'<p class="sub">{esc(str(source))}</p>' if source else ""
 
-    # Hourly strip data for the target day, clipped to daylight hours so the
-    # strip sits under the lit portion of the tide chart (night is shaded).
+    # Hourly strip data for the target day. tide_svg clips it to the plotted
+    # window (dawn..dusk), so pass the full day's hours here.
     target_hours: list[dict[str, Any]] = []
     for md in conditions.get("marine", {}).get("days", []):
         if md.get("date") == target_date:
             target_hours = md.get("hours") or []
             break
-    if target_hours and daylight_row:
-        try:
-            lo = int(str(daylight_row["first_light"])[:2])
-            hi = int(str(daylight_row["last_light"])[:2]) + 1
-            target_hours = [h for h in target_hours if lo <= int(h["time"][:2]) <= hi]
-        except (KeyError, ValueError, TypeError):
-            pass
     swell_unit = units.get("wave_height", "m")
     wind_unit = units.get("wind_speed", "kn")
 
