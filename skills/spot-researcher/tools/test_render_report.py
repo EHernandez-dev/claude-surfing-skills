@@ -670,13 +670,45 @@ class TestRenderDeterminism:
         assert render_dashboard(pkg) == render_dashboard(pkg)
 
     def test_both_color_schemes_present(self):
-        # Light base palette plus the prefers-color-scheme dark block; the page
-        # never sets a data-theme attribute, so no such selectors belong here.
+        # Light base palette, an explicit dark palette on [data-theme="dark"],
+        # and a prefers-color-scheme fallback for the default "auto" choice.
         out = render_dashboard(load_package())
         assert "--page: #eef1f4" in out  # light base
         assert "prefers-color-scheme: dark" in out
-        assert "--page: #0d1520" in out  # dark palette inside the media query
-        assert "data-theme" not in out
+        assert "--page: #0d1520" in out  # dark palette
+        assert ':root[data-theme="dark"]' in out  # explicit dark override
+        # auto/absent follows the system; explicit light always wins
+        assert ':root:not([data-theme="light"]):not([data-theme="dark"])' in out
+
+
+class TestThemeControl:
+    def test_segmented_control_offers_auto_light_dark(self):
+        out = render_dashboard(load_package())
+        assert 'class="theme-seg"' in out
+        assert 'data-theme-choice="auto"' in out
+        assert 'data-theme-choice="light"' in out
+        assert 'data-theme-choice="dark"' in out
+
+    def test_auto_is_the_default_selection(self):
+        # Auto is pre-pressed so a first load with no stored choice matches the
+        # page's actual state (data-theme unset => follows the system).
+        out = render_dashboard(load_package())
+        seg = out[out.index('class="theme-seg"'):]
+        seg = seg[: seg.index("</div>")]
+        assert 'data-theme-choice="auto" aria-pressed="true"' in seg
+        assert 'data-theme-choice="light" aria-pressed="false"' in seg
+        assert 'data-theme-choice="dark" aria-pressed="false"' in seg
+
+    def test_light_and_dark_use_sun_and_moon_symbols(self):
+        out = render_dashboard(load_package())
+        assert "☀️" in out
+        assert "\U0001f319" in out  # 🌙
+
+    def test_head_init_prevents_theme_flash(self):
+        # An inline head script applies a stored explicit choice before paint.
+        out = render_dashboard(load_package())
+        assert "surf-theme" in out
+        assert out.index("surf-theme") < out.index("<body>")
 
 
 # ---------------------------------------------------------------------------

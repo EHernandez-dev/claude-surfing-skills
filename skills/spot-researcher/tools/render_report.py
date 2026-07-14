@@ -752,6 +752,19 @@ def _verdict_chip(verdict: str, suffix: str | None = None, extra_class: str = ""
     return f'<span class="{classes}">{emoji} {html.escape(text)}</span>'
 
 
+# The dark palette, declared once and spliced into both dark selectors below
+# (the explicit [data-theme="dark"] override and the prefers-color-scheme
+# fallback) so the two can never drift. Kept as a sentinel-replaced constant
+# rather than an f-string so the surrounding CSS stays readable as plain CSS.
+_DARK_VARS = (
+    "--page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;\n"
+    "  --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);\n"
+    "  --go: #16c86a; --check: #f2b62c; --skip: #e2543f;\n"
+    "  --tide-high: #4d9be6; --tide-low: #2fd39a;\n"
+    "  --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;\n"
+    "  --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;"
+)
+
 PAGE_CSS = """
 :root {
   --page: #eef1f4; --card: #ffffff; --ink: #1a2431; --muted: #5c6b7a;
@@ -761,14 +774,15 @@ PAGE_CSS = """
   --overlay-bg: rgba(12, 20, 31, 0.82); --overlay-ink: #f4f7fb;
   --warn-bg: #fbecdf; --warn-border: #e6b8a6; --warn-ink: #8a3a25;
 }
+/* Dark palette. Applied when the reader explicitly picks dark
+   (data-theme="dark"), and, for the default "auto" choice (data-theme unset or
+   "auto"), when the system prefers dark. Explicit "light" always wins. */
+:root[data-theme="dark"] {
+  __DARK_VARS__
+}
 @media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;
-    --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
-    --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
-    --tide-high: #4d9be6; --tide-low: #2fd39a;
-    --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
-    --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    __DARK_VARS__
   }
 }
 * { box-sizing: border-box; }
@@ -860,7 +874,7 @@ body {
   .week-chip { width: auto; }
   .week-detail { flex-basis: 100%; }
 }
-"""
+""".replace("__DARK_VARS__", _DARK_VARS)
 
 # Week-planner-only styling, appended after PAGE_CSS. Reuses the palette, chip
 # styles, cards, and dark mode above; adds the ranking rows and per-spot cards.
@@ -928,6 +942,18 @@ DASHBOARD_CSS = """
 }
 .tab:hover { color: var(--ink); background: var(--page); }
 .tab[aria-selected="true"] { color: #fff; background: var(--accent); }
+.theme-seg {
+  display: inline-flex; margin-left: auto; align-self: center; flex: none;
+  background: var(--page); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px; gap: 2px;
+}
+.theme-seg button {
+  font: inherit; font-size: 0.82rem; font-weight: 700; line-height: 1; cursor: pointer;
+  border: none; background: transparent; color: var(--muted);
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+.theme-seg button:hover { color: var(--ink); }
+.theme-seg button[aria-pressed="true"] { color: #fff; background: var(--accent); }
 .panel[hidden] { display: none; }
 .placeholder { color: var(--muted); }
 .tide-week { margin-top: 6px; }
@@ -1028,6 +1054,43 @@ TOGGLE_JS = """(function () {
   });
   window.addEventListener('hashchange', fromHash);
   fromHash();
+})();"""
+
+# Runs inline in <head>, before the body paints, so an explicit light/dark
+# choice never flashes the system palette first. An "auto"/absent choice leaves
+# data-theme unset and lets the prefers-color-scheme media query decide.
+THEME_INIT_JS = (
+    "(function(){try{var v=localStorage.getItem('surf-theme');"
+    "if(v==='light'||v==='dark'){document.documentElement.setAttribute('data-theme',v);}"
+    "}catch(e){}})();"
+)
+
+# Wires the tab-bar theme segmented control (Auto / sun / moon). The chosen
+# value is written to <html data-theme> and remembered in localStorage;
+# "auto" clears the override so the page follows the system again.
+THEME_JS = """(function () {
+  var KEY = 'surf-theme';
+  var root = document.documentElement;
+  var seg = document.querySelector('.theme-seg');
+  if (!seg) { return; }
+  function choice() {
+    var v;
+    try { v = localStorage.getItem(KEY); } catch (e) { v = null; }
+    return (v === 'light' || v === 'dark') ? v : 'auto';
+  }
+  function apply(v) {
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+    if (v === 'light' || v === 'dark') { root.setAttribute('data-theme', v); }
+    else { root.removeAttribute('data-theme'); }
+    seg.querySelectorAll('button[data-theme-choice]').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-theme-choice') === v ? 'true' : 'false');
+    });
+  }
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-theme-choice]');
+    if (b) { apply(b.getAttribute('data-theme-choice')); }
+  });
+  apply(choice());
 })();"""
 
 # Forecast day selector: every day's detail chart is already in the DOM (one
@@ -1377,7 +1440,22 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"{esc(label)}</button>"
         for key, label in DASHBOARD_TABS
     )
-    tabbar = f'<nav class="tabbar" role="tablist" aria-label="Dashboard views">{tab_buttons}</nav>'
+    # Theme control docked at the right end of the bar: Auto (follow system,
+    # the default), plus explicit sun/moon overrides. Grouped separately from
+    # the tabs so it stays out of the tablist's tab sequence.
+    theme_control = (
+        '<div class="theme-seg" role="group" aria-label="Colour theme">'
+        '<button type="button" data-theme-choice="auto" aria-pressed="true" title="Match system">Auto</button>'
+        '<button type="button" data-theme-choice="light" aria-pressed="false" '
+        'aria-label="Light theme" title="Light">☀️</button>'
+        '<button type="button" data-theme-choice="dark" aria-pressed="false" '
+        'aria-label="Dark theme" title="Dark">\U0001f319</button>'
+        "</div>"
+    )
+    tabbar = (
+        '<nav class="tabbar" role="tablist" aria-label="Dashboard views">'
+        f"{tab_buttons}{theme_control}</nav>"
+    )
 
     # --- Panels (Today + Forecast populated; Windows / Spot info placeholders) --
     # Populated bodies are looked up by tab key; any tab without one falls back
@@ -1417,6 +1495,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"<title>{esc(str(view['spot_name']))} surf dashboard</title>\n"
         f"<style>{leaflet_css}</style>\n"
         f"<style>{PAGE_CSS}{DASHBOARD_CSS}</style>\n"
+        f"<script>{THEME_INIT_JS}</script>\n"
         "</head>\n<body>\n"
         f"{tabbar}\n"
         f"{panels_html}\n"
@@ -1424,6 +1503,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"<script>{leaflet_js}</script>\n"
         f"<script>{map_js}</script>\n"
         f"<script>{TOGGLE_JS}</script>\n"
+        f"<script>{THEME_JS}</script>\n"
         f"<script>{FORECAST_JS}</script>\n"
         "</body>\n</html>\n"
     )

@@ -675,14 +675,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --overlay-bg: rgba(12, 20, 31, 0.82); --overlay-ink: #f4f7fb;
   --warn-bg: #fbecdf; --warn-border: #e6b8a6; --warn-ink: #8a3a25;
 }
+/* Dark palette. Applied when the reader explicitly picks dark
+   (data-theme="dark"), and, for the default "auto" choice (data-theme unset or
+   "auto"), when the system prefers dark. Explicit "light" always wins. */
+:root[data-theme="dark"] {
+  --page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;
+  --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
+  --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
+  --tide-high: #4d9be6; --tide-low: #2fd39a;
+  --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
+  --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;
-    --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
-    --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
-    --tide-high: #4d9be6; --tide-low: #2fd39a;
-    --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
-    --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
+  --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
+  --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
+  --tide-high: #4d9be6; --tide-low: #2fd39a;
+  --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
+  --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
   }
 }
 * { box-sizing: border-box; }
@@ -787,6 +798,18 @@ body {
 }
 .tab:hover { color: var(--ink); background: var(--page); }
 .tab[aria-selected="true"] { color: #fff; background: var(--accent); }
+.theme-seg {
+  display: inline-flex; margin-left: auto; align-self: center; flex: none;
+  background: var(--page); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px; gap: 2px;
+}
+.theme-seg button {
+  font: inherit; font-size: 0.82rem; font-weight: 700; line-height: 1; cursor: pointer;
+  border: none; background: transparent; color: var(--muted);
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+.theme-seg button:hover { color: var(--ink); }
+.theme-seg button[aria-pressed="true"] { color: #fff; background: var(--accent); }
 .panel[hidden] { display: none; }
 .placeholder { color: var(--muted); }
 .tide-week { margin-top: 6px; }
@@ -816,9 +839,10 @@ body {
   .fc-crow .sw, .fc-crow .desc { width: auto; flex-basis: 100%; }
 }
 </style>
+<script>(function(){try{var v=localStorage.getItem('surf-theme');if(v==='light'||v==='dark'){document.documentElement.setAttribute('data-theme',v);}}catch(e){}})();</script>
 </head>
 <body>
-<nav class="tabbar" role="tablist" aria-label="Dashboard views"><button class="tab" id="tab-today" role="tab" data-panel="today" aria-controls="panel-today" aria-selected="true">Today</button><button class="tab" id="tab-forecast" role="tab" data-panel="forecast" aria-controls="panel-forecast" aria-selected="false">Forecast</button><button class="tab" id="tab-windows" role="tab" data-panel="windows" aria-controls="panel-windows" aria-selected="false">Windows</button><button class="tab" id="tab-info" role="tab" data-panel="info" aria-controls="panel-info" aria-selected="false">Spot info</button></nav>
+<nav class="tabbar" role="tablist" aria-label="Dashboard views"><button class="tab" id="tab-today" role="tab" data-panel="today" aria-controls="panel-today" aria-selected="true">Today</button><button class="tab" id="tab-forecast" role="tab" data-panel="forecast" aria-controls="panel-forecast" aria-selected="false">Forecast</button><button class="tab" id="tab-windows" role="tab" data-panel="windows" aria-controls="panel-windows" aria-selected="false">Windows</button><button class="tab" id="tab-info" role="tab" data-panel="info" aria-controls="panel-info" aria-selected="false">Spot info</button><div class="theme-seg" role="group" aria-label="Colour theme"><button type="button" data-theme-choice="auto" aria-pressed="true" title="Match system">Auto</button><button type="button" data-theme-choice="light" aria-pressed="false" aria-label="Light theme" title="Light">☀️</button><button type="button" data-theme-choice="dark" aria-pressed="false" aria-label="Dark theme" title="Dark">🌙</button></div></nav>
 <section class="panel" id="panel-today" role="tabpanel" aria-labelledby="tab-today">
 <section class="hero"><div id="surf-map"></div><div class="overlay"><span class="chip chip-go">🟢 GO · SATURDAY</span><h1>Mundaka</h1><p class="sub">Clean 1.2 m NW groundswell at 13 s with light offshore wind; the sandbar should be firing on the pushing tide.</p></div></section>
 <main class="wrap">
@@ -880,6 +904,30 @@ body {
   });
   window.addEventListener('hashchange', fromHash);
   fromHash();
+})();</script>
+<script>(function () {
+  var KEY = 'surf-theme';
+  var root = document.documentElement;
+  var seg = document.querySelector('.theme-seg');
+  if (!seg) { return; }
+  function choice() {
+    var v;
+    try { v = localStorage.getItem(KEY); } catch (e) { v = null; }
+    return (v === 'light' || v === 'dark') ? v : 'auto';
+  }
+  function apply(v) {
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+    if (v === 'light' || v === 'dark') { root.setAttribute('data-theme', v); }
+    else { root.removeAttribute('data-theme'); }
+    seg.querySelectorAll('button[data-theme-choice]').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-theme-choice') === v ? 'true' : 'false');
+    });
+  }
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-theme-choice]');
+    if (b) { apply(b.getAttribute('data-theme-choice')); }
+  });
+  apply(choice());
 })();</script>
 <script>(function () {
   var panel = document.getElementById('panel-forecast');

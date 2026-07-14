@@ -675,14 +675,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --overlay-bg: rgba(12, 20, 31, 0.82); --overlay-ink: #f4f7fb;
   --warn-bg: #fbecdf; --warn-border: #e6b8a6; --warn-ink: #8a3a25;
 }
+/* Dark palette. Applied when the reader explicitly picks dark
+   (data-theme="dark"), and, for the default "auto" choice (data-theme unset or
+   "auto"), when the system prefers dark. Explicit "light" always wins. */
+:root[data-theme="dark"] {
+  --page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;
+  --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
+  --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
+  --tide-high: #4d9be6; --tide-low: #2fd39a;
+  --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
+  --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;
-    --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
-    --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
-    --tide-high: #4d9be6; --tide-low: #2fd39a;
-    --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
-    --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
+  --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
+  --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
+  --tide-high: #4d9be6; --tide-low: #2fd39a;
+  --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
+  --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
   }
 }
 * { box-sizing: border-box; }
