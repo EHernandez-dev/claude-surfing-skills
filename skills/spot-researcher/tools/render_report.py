@@ -11,7 +11,9 @@ small inline script that shows one panel at a time on click (no refetch; the
 opening tab is chosen by a URL fragment appended when the file is opened). The
 Today panel carries the former single-mode content: a Leaflet map hero with the
 verdict chip and the Python-generated tide curve with the aligned hourly strip,
-both clipped to the target day's daylight. Forecast / Windows / Spot info are
+both clipped to the target day's daylight. The Forecast panel carries this
+spot's next 7 days (swell / wind / verdict rows) plus a compressed 7-day tide
+chart, each day clipped to its own daylight window. Windows / Spot info are
 placeholders filled by later slices. Dark mode is carried via
 prefers-color-scheme.
 
@@ -79,6 +81,17 @@ _SVG_SAMPLES = 120
 # hours. Extends the viewBox height only; the tide plot geometry is unchanged.
 _STRIP_H = 116.0
 _STRIP_BAR_MAX = 42.0  # tallest swell bar, in px above its baseline
+
+# Week (Forecast) tide chart geometry: one compressed, daylight-clipped column
+# per forecast day drawn into the same _SVG_W-wide viewBox. Night hours between
+# days are collapsed into the gutter between columns (never drawn), Windguru
+# style. The x span reuses _PAD_L/_PAD_R so the chart lines up with the page.
+_WEEK_SVG_H = 240.0
+_WEEK_PAD_T = 24.0
+_WEEK_PAD_B = 40.0  # room for the per-day weekday labels under the baseline
+_WEEK_PLOT_H = _WEEK_SVG_H - _WEEK_PAD_T - _WEEK_PAD_B
+_WEEK_DAY_GAP = 14.0  # blank gutter each column, i.e. the collapsed night
+_WEEK_DAY_SAMPLES = 48  # curve samples across each day's daylight window
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +235,33 @@ def _fmt_label(v: float) -> str:
     return f"{v:.0f}" if float(v).is_integer() else f"{v:.1f}"
 
 
+def _tide_y_bounds(heights: list[float]) -> tuple[float, float]:
+    """The (y_lo, y_hi) tide-height range with a 15% headroom pad on each side.
+
+    Shared by the single-day (`tide_svg`) and 7-day (`week_tide_svg`) charts so
+    both scale their y axis identically; supports negative heights.
+    """
+    min_h, max_h = min(heights), max(heights)
+    pad = ((max_h - min_h) or 1.0) * 0.15
+    return min_h - pad, max_h + pad
+
+
+def _curve_and_fill(points: list[tuple[float, float]], plot_bottom: float) -> tuple[str, str]:
+    """The polyline point string and the closed fill path for a sampled curve.
+
+    Shared by both tide charts: `points` are the sampled (x, y) coordinates and
+    `plot_bottom` is the baseline the soft fill drops to. Returns
+    (polyline_points, fill_path_d).
+    """
+    line = " ".join(f"{_fmt(px)},{_fmt(py)}" for px, py in points)
+    fill = (
+        f"M {_fmt(points[0][0])},{_fmt(plot_bottom)} "
+        + " ".join(f"L {_fmt(px)},{_fmt(py)}" for px, py in points)
+        + f" L {_fmt(points[-1][0])},{_fmt(plot_bottom)} Z"
+    )
+    return line, fill
+
+
 def tide_svg(
     extremes: list[dict[str, Any]],
     windows: list[dict[str, Any]],
@@ -244,11 +284,7 @@ def tide_svg(
     drawn below the plot sharing the same x(hour) mapping, so each hour's swell
     bar and wind arrow line up under the tide curve and session bands.
     """
-    heights = [e["h"] for e in extremes]
-    min_h, max_h = min(heights), max(heights)
-    rng = max_h - min_h or 1.0
-    pad = rng * 0.15
-    y_lo, y_hi = min_h - pad, max_h + pad
+    y_lo, y_hi = _tide_y_bounds([e["h"] for e in extremes])
 
     # X domain: dawn to evening glass-off (first_light..last_light) when the
     # daylight row is known, so the chart spans only the surfable day instead of
@@ -358,12 +394,7 @@ def tide_svg(
     for i in range(_SVG_SAMPLES + 1):
         hour = t0 + span * i / _SVG_SAMPLES
         points.append((x(hour), y(tide_height_at(hour, extremes))))
-    line = " ".join(f"{_fmt(px)},{_fmt(py)}" for px, py in points)
-    fill = (
-        f"M {_fmt(points[0][0])},{_fmt(plot_bottom)} "
-        + " ".join(f"L {_fmt(px)},{_fmt(py)}" for px, py in points)
-        + f" L {_fmt(points[-1][0])},{_fmt(plot_bottom)} Z"
-    )
+    line, fill = _curve_and_fill(points, plot_bottom)
     parts.append(f'<path class="tide-fill" d="{fill}" />')
     parts.append(f'<polyline class="tide-curve" points="{line}" />')
 
@@ -485,6 +516,118 @@ def tide_svg(
             f'<text class="strip-unit" x="{_fmt(_PAD_L + _PLOT_W)}" y="{_fmt(wind_lbl_y)}" '
             f'text-anchor="end">wind {html.escape(wind_unit)}</text>'
         )
+
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def week_tide_svg(days: list[dict[str, Any]], unit_label: str) -> str:
+    """Render a compressed 7-day tide curve, one daylight-clipped column per day.
+
+    `days` is the per-day list resolved by `_forecast_view`: each entry carries
+    `date`, `label` (weekday abbreviation), `extremes` (the `assemble_extremes`
+    output for that day) and `daylight` (`{first_light, last_light}` or None).
+    Every day gets an equal-width column; inside it the curve is sampled only
+    across that day's first_light..last_light window (a full 0-24 h fallback when
+    daylight is absent), so the night hours between days are collapsed into the
+    gutter and never drawn (Windguru style). The y scale is shared across all
+    days so heights are comparable, reusing `tide_height_at` for interpolation
+    and the same CSS classes as `tide_svg` so one SVG renders in both themes.
+    """
+    days = [d for d in days if d.get("extremes")]
+    if not days:
+        return ""
+
+    # A single y scale across every day's extremes keeps columns comparable.
+    y_lo, y_hi = _tide_y_bounds([e["h"] for d in days for e in d["extremes"]])
+
+    n = len(days)
+    plot_left = _PAD_L
+    plot_right = _SVG_W - _PAD_R
+    col_w = (plot_right - plot_left) / n
+    plot_bottom = _WEEK_PAD_T + _WEEK_PLOT_H
+
+    def y(height: float) -> float:
+        return _WEEK_PAD_T + (y_hi - height) / (y_hi - y_lo) * _WEEK_PLOT_H
+
+    def day_window(day: dict[str, Any]) -> tuple[float, float]:
+        dl = day.get("daylight") or {}
+        try:
+            return parse_hhmm(dl["first_light"]), parse_hhmm(dl["last_light"])
+        except (KeyError, ValueError, TypeError):
+            return 0.0, 24.0
+
+    parts: list[str] = [
+        f'<svg class="tide-chart tide-week" viewBox="0 0 {_fmt(_SVG_W)} {_fmt(_WEEK_SVG_H)}" '
+        f'preserveAspectRatio="xMidYMid meet" role="img" '
+        f'aria-label="Seven-day tide height, each day clipped to its daylight hours">'
+    ]
+
+    # Shared axis: baseline, three height ticks, one unit label on the left.
+    parts.append(
+        f'<line class="tide-axis" x1="{_fmt(plot_left)}" y1="{_fmt(plot_bottom)}" '
+        f'x2="{_fmt(plot_right)}" y2="{_fmt(plot_bottom)}" />'
+    )
+    for i in range(3):
+        hv = y_lo + (y_hi - y_lo) * i / 2
+        ty = y(hv)
+        parts.append(
+            f'<text class="tide-axis-label" x="{_fmt(plot_left - 8)}" y="{_fmt(ty + 3)}" '
+            f'text-anchor="end">{_fmt_height(hv)}</text>'
+        )
+    parts.append(
+        f'<text class="tide-axis-label" x="{_fmt(plot_left - 8)}" y="{_fmt(_WEEK_PAD_T - 10)}" '
+        f'text-anchor="end">{html.escape(unit_label)}</text>'
+    )
+
+    for i, day in enumerate(days):
+        t0, t1 = day_window(day)
+        span = (t1 - t0) or 24.0
+        seg_left = plot_left + i * col_w + _WEEK_DAY_GAP / 2
+        seg_right = plot_left + (i + 1) * col_w - _WEEK_DAY_GAP / 2
+        seg_w = seg_right - seg_left
+        extremes = day["extremes"]
+
+        def x(hour: float, seg_left: float = seg_left, seg_w: float = seg_w,
+              t0: float = t0, span: float = span) -> float:
+            return seg_left + ((hour - t0) / span) * seg_w
+
+        parts.append(
+            f'<g class="tide-week-day" data-day="{html.escape(str(day.get("date", "")))}">'
+        )
+
+        # A divider before every column but the first marks the collapsed night.
+        if i > 0:
+            div_x = plot_left + i * col_w
+            parts.append(
+                f'<line class="tide-week-divider" x1="{_fmt(div_x)}" y1="{_fmt(_WEEK_PAD_T)}" '
+                f'x2="{_fmt(div_x)}" y2="{_fmt(plot_bottom)}" />'
+            )
+
+        # Curve + soft fill, sampled only across this day's daylight window.
+        points = [
+            (x(t0 + span * s / _WEEK_DAY_SAMPLES), y(tide_height_at(t0 + span * s / _WEEK_DAY_SAMPLES, extremes)))
+            for s in range(_WEEK_DAY_SAMPLES + 1)
+        ]
+        line, fill = _curve_and_fill(points, plot_bottom)
+        parts.append(f'<path class="tide-fill" d="{fill}" />')
+        parts.append(f'<polyline class="tide-curve" points="{line}" />')
+
+        # Dots for real events inside this day's daylight window (no labels: the
+        # week chart is a compressed overview; the Today chart carries the times).
+        for e in extremes:
+            if e["time"] is None or not (t0 <= e["t"] <= t1):
+                continue
+            parts.append(
+                f'<circle class="tide-dot" cx="{_fmt(x(e["t"]))}" cy="{_fmt(y(e["h"]))}" r="3" />'
+            )
+
+        parts.append(
+            f'<text class="tide-week-label" x="{_fmt((seg_left + seg_right) / 2)}" '
+            f'y="{_fmt(plot_bottom + 18)}" text-anchor="middle">'
+            f'{html.escape(str(day.get("label", "")))}</text>'
+        )
+        parts.append("</g>")
 
     parts.append("</svg>")
     return "".join(parts)
@@ -690,6 +833,9 @@ DASHBOARD_CSS = """
 .tab[aria-selected="true"] { color: #fff; background: var(--accent); }
 .panel[hidden] { display: none; }
 .placeholder { color: var(--muted); }
+.tide-week { margin-top: 6px; }
+.tide-week-divider { stroke: var(--border); stroke-width: 1; }
+.tide-week-label { fill: var(--muted); font-size: 11px; font-weight: 600; }
 """
 
 # The map init is a few inline lines. Literal {z}/{x}/{y} in the tile template
@@ -772,10 +918,10 @@ DASHBOARD_TABS = [
     ("info", "Spot info"),
 ]
 
-# Placeholder copy for the three panels this slice does not yet populate; later
-# slices replace each body. Kept in sync with the Markdown twin's placeholders.
+# Placeholder copy for the panels this slice does not yet populate; later slices
+# replace each body. Today and Forecast are populated; Windows and Spot info are
+# still placeholders. Kept in sync with the Markdown twin's placeholders.
 PANEL_PLACEHOLDERS = {
-    "forecast": ("Forecast", "This spot's 7-day forecast lands here in a later update."),
     "windows": ("Windows", "The ranked session windows for this week land here in a later update."),
     "info": (
         "Spot info",
@@ -869,6 +1015,48 @@ def _target_day_events(tide_days: list[dict[str, Any]] | None, target_date: str 
     return []
 
 
+def _forecast_view(package: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the shared Forecast values used by both the HTML and Markdown twins.
+
+    Pairs each `analysis.week` row with that day's assembled tide extremes and
+    daylight window so the Forecast panel and its flat Markdown twin never drift.
+    All three inputs already live in the payload: `analysis.week` (per-day
+    swell/wind/verdict, already corrected to the spot's works-on profile),
+    `conditions.tides.days` (per-day extremes) and `conditions.daylight.days`
+    (per-day first/last light). No fetch_conditions.py change is required.
+    """
+    conditions = package.get("conditions", {})
+    analysis = package.get("analysis", {})
+    units = conditions.get("units", {})
+    tides = conditions.get("tides", {})
+    tide_days = tides.get("days")
+
+    daylight_by_date = {
+        row["date"]: row
+        for row in conditions.get("daylight", {}).get("days", [])
+        if row.get("date") and "first_light" in row and "last_light" in row
+    }
+
+    week = analysis.get("week") or []
+    days = []
+    for entry in week:
+        d = entry.get("date")
+        days.append({
+            "date": d,
+            "label": _weekday(d, WEEKDAY_ABBR) if d else "",
+            "extremes": assemble_extremes(tide_days, d) if (tide_days and d) else [],
+            "daylight": daylight_by_date.get(d),
+            "entry": entry,
+        })
+    return {
+        "week": week,
+        "days": days,
+        "tide_unit": units.get("tide_height", "m"),
+        "tide_source": tides.get("source"),
+        "has_tides": any(day["extremes"] for day in days),
+    }
+
+
 def _today_panel_html(view: dict[str, Any]) -> tuple[str, str]:
     """Build the Today panel body (hero + tide/session card) and its map JS.
 
@@ -919,14 +1107,67 @@ def _today_panel_html(view: dict[str, Any]) -> tuple[str, str]:
     return panel, map_js
 
 
+def _forecast_panel_html(view: dict[str, Any]) -> str:
+    """Build the Forecast panel body: this spot's next 7 days plus a 7-day tide chart.
+
+    Takes the resolved `_forecast_view` dict (mirroring how `_today_panel_html`
+    takes the resolved `_target_day_view`), so the caller resolves once. Each day
+    row carries its swell, wind and (works-on-corrected) verdict from
+    `analysis.week`; the single compressed tide chart below draws one
+    daylight-clipped column per day via `week_tide_svg`.
+    """
+    esc = html.escape
+
+    if not view["week"]:
+        return (
+            '<main class="wrap"><section class="card"><h2>Forecast</h2>'
+            '<p class="placeholder">No 7-day forecast is available for this spot.</p>'
+            "</section></main>"
+        )
+
+    rows = []
+    for entry in view["week"]:
+        d = entry.get("date")
+        day_label = f"{_weekday(d, WEEKDAY_ABBR)} {date.fromisoformat(d).day}" if d else "?"
+        chip = _verdict_chip(entry.get("verdict", "check"), extra_class="week-verdict")
+        detail = _entry_detail(entry)
+        rows.append(
+            f'<div class="week-row"><div class="week-day">{esc(day_label)}</div>'
+            f'<div class="week-chip">{chip}</div>'
+            f'<div class="week-detail">{esc(detail)}</div></div>'
+        )
+    days_section = (
+        '<section class="card"><h2>Next 7 days</h2>'
+        '<p class="sub">Verdicts corrected to this spot\'s works-on profile.</p>'
+        f'{"".join(rows)}</section>'
+    )
+
+    if view["has_tides"]:
+        source = f"{view['tide_source']}. " if view["tide_source"] else ""
+        chart_section = (
+            '<section class="card"><h2>7-day tide</h2>'
+            f'<p class="sub">{esc(source)}Each day clipped to its daylight hours '
+            "(first light to last light); night hours are not drawn.</p>"
+            f'{week_tide_svg(view["days"], view["tide_unit"])}</section>'
+        )
+    else:
+        chart_section = (
+            '<section class="card"><h2>7-day tide</h2>'
+            '<p class="tide-note">No automated tide data for this spot.</p></section>'
+        )
+
+    return f'<main class="wrap">\n{days_section}\n{chart_section}\n</main>'
+
+
 def render_dashboard(package: dict[str, Any]) -> str:
     """Render the self-contained tabbed Dashboard HTML document for a package.
 
     One file: a four-button tab bar (Today / Forecast / Windows / Spot info),
     four panels, and an inline toggle script that shows one panel at a time (the
-    opening tab is chosen by a URL fragment; default Today). Only the Today panel
-    is populated in this slice; the other three are placeholders. Reads Leaflet's
-    vendored CSS/JS for inlining (raises OSError when missing, which the CLI
+    opening tab is chosen by a URL fragment; default Today). The Today and
+    Forecast panels are populated; Windows and Spot info are still placeholders.
+    Reads Leaflet's vendored CSS/JS for inlining (raises OSError when missing,
+    which the CLI
     turns into a soft failure). Every value drawn from the package is
     HTML-escaped; the only remote reference emitted is the OSM tile URL template
     inside the inlined map init.
@@ -938,6 +1179,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
     leaflet_js = _read_vendor("leaflet.js")
 
     today_body, map_js = _today_panel_html(view)
+    forecast_body = _forecast_panel_html(_forecast_view(package))
 
     # --- Tab bar (fixed order) ---------------------------------------------
     tab_buttons = "".join(
@@ -948,20 +1190,23 @@ def render_dashboard(package: dict[str, Any]) -> str:
     )
     tabbar = f'<nav class="tabbar" role="tablist" aria-label="Dashboard views">{tab_buttons}</nav>'
 
-    # --- Panels (Today populated; the rest placeholders) --------------------
-    panels = [
-        '<section class="panel" id="panel-today" role="tabpanel" '
-        f'aria-labelledby="tab-today">\n{today_body}\n</section>'
-    ]
-    for key, label in DASHBOARD_TABS:
-        if key == "today":
-            continue
-        heading, copy = PANEL_PLACEHOLDERS[key]
+    # --- Panels (Today + Forecast populated; Windows / Spot info placeholders) --
+    # Populated bodies are looked up by tab key; any tab without one falls back
+    # to its placeholder card, so render_dashboard stays tab-agnostic.
+    populated = {"today": today_body, "forecast": forecast_body}
+    panels = []
+    for key, _label in DASHBOARD_TABS:
+        body = populated.get(key)
+        if body is None:
+            heading, copy = PANEL_PLACEHOLDERS[key]
+            body = (
+                f'<main class="wrap"><section class="card"><h2>{esc(heading)}</h2>'
+                f'<p class="placeholder">{esc(copy)}</p></section></main>'
+            )
+        hidden = "" if key == "today" else " hidden"
         panels.append(
             f'<section class="panel" id="panel-{key}" role="tabpanel" '
-            f'aria-labelledby="tab-{key}" hidden>\n'
-            f'<main class="wrap"><section class="card"><h2>{esc(heading)}</h2>'
-            f'<p class="placeholder">{esc(copy)}</p></section></main>\n</section>'
+            f'aria-labelledby="tab-{key}"{hidden}>\n{body}\n</section>'
         )
     panels_html = "\n".join(panels)
 
@@ -997,11 +1242,11 @@ def render_dashboard(package: dict[str, Any]) -> str:
 def render_dashboard_markdown(package: dict[str, Any]) -> str:
     """Render the flat Markdown twin of the Dashboard (no tabs; sections stacked).
 
-    Markdown has no tabs, so the four views stack: Today (populated) then
-    Forecast / Windows / Spot info placeholders. The Today section mirrors the
-    HTML Today panel (verdict, one-liner, tide events, session windows) from the
-    same resolved values, so the twin never drifts from the page. Raises
-    KeyError when `analysis.target_day` is absent (soft-failed by the CLI).
+    Markdown has no tabs, so the four views stack: Today and Forecast (populated)
+    then Windows / Spot info placeholders. The Today and Forecast sections mirror
+    their HTML panels from the same resolved values (`_target_day_view` /
+    `_forecast_view`), so the twin never drifts from the page. Raises KeyError
+    when `analysis.target_day` is absent (soft-failed by the CLI).
     """
     view = _target_day_view(package)
     emoji, label = VERDICT_DISPLAY.get(view["verdict"], ("", str(view["verdict"]).upper()))
@@ -1043,8 +1288,29 @@ def render_dashboard_markdown(package: dict[str, Any]) -> str:
             lines.append(f"- {label_w}: {w.get('from', '?')}-{w.get('to', '?')}")
         lines.append("")
 
+    # Forecast: this spot's next 7 days, mirroring the HTML Forecast panel rows.
+    forecast = _forecast_view(package)
+    lines += ["## Forecast", ""]
+    if forecast["week"]:
+        for entry in forecast["week"]:
+            d = entry.get("date")
+            weekday = _weekday(d, WEEKDAY_FULL) if d else "?"
+            v_emoji, v_label = VERDICT_DISPLAY.get(
+                entry.get("verdict"), ("", str(entry.get("verdict", "")).upper())
+            )
+            head = f"{weekday} {d}".strip()
+            verdict_str = f"{v_emoji} {v_label}".strip()
+            detail = _entry_detail(entry)
+            line = f"- **{head}** - {verdict_str}"
+            if detail:
+                line += f" - {detail}"
+            lines.append(line)
+        lines.append("")
+    else:
+        lines += ["_No 7-day forecast is available for this spot._", ""]
+
     for key, _ in DASHBOARD_TABS:
-        if key == "today":
+        if key not in PANEL_PLACEHOLDERS:
             continue
         heading, copy = PANEL_PLACEHOLDERS[key]
         lines += [f"## {heading}", "", f"_{copy}_", ""]

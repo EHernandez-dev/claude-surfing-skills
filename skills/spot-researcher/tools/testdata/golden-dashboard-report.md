@@ -23,7 +23,13 @@ Source: WorldTides.
 
 ## Forecast
 
-_This spot's 7-day forecast lands here in a later update._
+- **Saturday 2026-07-11** - 🟢 GO - 1.2 m NW @ 13 s · 8 km/h offshore - clean groundswell, light offshore, pushing tide
+- **Sunday 2026-07-12** - 🟡 WORTH A CHECK - 0.9 m NW @ 11 s · 14 km/h cross-shore - dropping and a touch bumpy by midday
+- **Monday 2026-07-13** - 🔴 SKIP - 0.4 m W @ 7 s · 22 km/h onshore - small windswell, blown out
+- **Tuesday 2026-07-14** - 🔴 SKIP - 0.3 m W @ 6 s · 25 km/h onshore - flat and messy
+- **Wednesday 2026-07-15** - 🟡 WORTH A CHECK - 0.8 m NW @ 10 s · 12 km/h cross-shore - new pulse filling in, worth a dawn look
+- **Thursday 2026-07-16** - 🟢 GO - 1.5 m NW @ 14 s · 6 km/h offshore - solid long-period swell, glassy morning
+- **Friday 2026-07-17** - 🟡 WORTH A CHECK - 1.1 m NW @ 12 s · 16 km/h cross-shore - still fun early before the wind builds
 
 ## Windows
 

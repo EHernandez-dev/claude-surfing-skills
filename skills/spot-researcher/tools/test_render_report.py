@@ -42,6 +42,7 @@ from render_report import (
     tide_height_at,
     tide_svg,
     week_output_path,
+    week_tide_svg,
 )
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -356,12 +357,12 @@ class TestRenderDashboard:
         assert 'class="strip-bar' in today  # aligned hourly strip
         assert "tide &amp; session windows" in today
 
-    def test_other_panels_are_placeholders(self):
+    def test_windows_and_info_panels_are_placeholders(self):
         out = render_dashboard(load_package())
-        rest = out[out.index('id="panel-forecast"'):]
-        assert rest.count('class="placeholder"') == 3
+        rest = out[out.index('id="panel-windows"'):]
+        assert rest.count('class="placeholder"') == 2  # windows + info only
         assert "later update" in rest
-        # the populated Today content does not leak into the placeholder panels
+        # the populated Today/Forecast tide charts do not leak into the placeholders
         assert 'class="tide-chart"' not in rest
 
     def test_map_hero_and_invalidate_on_today(self):
@@ -383,6 +384,109 @@ class TestRenderDashboard:
         out = render_dashboard(load_package())
         assert "paired Markdown twin is saved alongside" in out
         assert "-dashboard.md" not in out
+
+
+class TestForecastPanel:
+    def _forecast_slice(self, out):
+        return out[out.index('id="panel-forecast"'):out.index('id="panel-windows"')]
+
+    def test_seven_day_rows_with_verdict_swell_wind(self):
+        fc = self._forecast_slice(render_dashboard(load_package()))
+        assert fc.count('class="week-row"') == 7
+        # verdicts corrected to the spot: go/check/skip all appear in the fixture
+        assert "chip-go" in fc and "chip-check" in fc and "chip-skip" in fc
+        # swell + wind detail from analysis.week rows
+        assert "1.2 m NW @ 13 s" in fc
+        assert "8 km/h offshore" in fc
+
+    def test_single_week_tide_chart_with_seven_daylight_columns(self):
+        fc = self._forecast_slice(render_dashboard(load_package()))
+        assert fc.count('class="tide-chart tide-week"') == 1
+        assert fc.count('class="tide-week-day"') == 7
+        assert "7-day tide" in fc
+        assert "night hours are not drawn" in fc  # daylight-clipping stated
+
+    def test_no_tide_data_keeps_rows_and_degrades_chart(self):
+        pkg = load_package()
+        pkg["conditions"]["tides"] = {"error": "no station", "note": "manual"}
+        fc = self._forecast_slice(render_dashboard(pkg))
+        assert fc.count('class="week-row"') == 7  # rows unaffected
+        assert "tide-week" not in fc  # chart degrades to a note
+        assert "No automated tide data" in fc
+
+    def test_empty_week_renders_placeholder(self):
+        pkg = load_package()
+        pkg["analysis"]["week"] = []
+        fc = self._forecast_slice(render_dashboard(pkg))
+        assert "No 7-day forecast is available" in fc
+        assert "tide-week" not in fc
+
+
+class TestWeekTideSvg:
+    """Focused 7-day tide-geometry tests (like the single-day _x_at tests)."""
+
+    def _days(self):
+        return render_report._forecast_view(load_package())["days"]
+
+    def _seg_bounds(self, i, n):
+        plot_left = render_report._PAD_L
+        plot_right = render_report._SVG_W - render_report._PAD_R
+        col_w = (plot_right - plot_left) / n
+        gap = render_report._WEEK_DAY_GAP
+        return plot_left + i * col_w + gap / 2, plot_left + (i + 1) * col_w - gap / 2
+
+    def test_one_group_per_day_labelled_by_date(self):
+        days = self._days()
+        svg = week_tide_svg(days, "m")
+        assert svg.count('class="tide-week-day"') == len(days)
+        for d in days:
+            assert f'data-day="{d["date"]}"' in svg
+
+    def test_each_segment_spans_its_daylight_window(self):
+        days = self._days()
+        svg = week_tide_svg(days, "m")
+        n = len(days)
+        # shared y scale, replicated from the implementation
+        all_h = [e["h"] for d in days for e in d["extremes"]]
+        rng = (max(all_h) - min(all_h)) or 1.0
+        y_lo, y_hi = min(all_h) - rng * 0.15, max(all_h) + rng * 0.15
+
+        def y(h):
+            return render_report._WEEK_PAD_T + (y_hi - h) / (y_hi - y_lo) * render_report._WEEK_PLOT_H
+
+        for i, d in enumerate(days):
+            left, right = self._seg_bounds(i, n)
+            t0 = parse_hhmm(d["daylight"]["first_light"])
+            t1 = parse_hhmm(d["daylight"]["last_light"])
+            span = (t1 - t0) or 24.0
+            # the day's curve starts at first_light (seg left) and ends at
+            # last_light (seg right): x is tied to the daylight window, not the
+            # whole day, so night hours are collapsed out.
+            y0 = y(tide_height_at(t0, d["extremes"]))
+            y1 = y(tide_height_at(t0 + span, d["extremes"]))
+            assert f'points="{left:.2f},{y0:.2f}' in svg
+            assert f' {right:.2f},{y1:.2f}"' in svg
+
+    def test_night_gap_between_days_is_not_drawn(self):
+        days = self._days()
+        n = len(days)
+        # adjacent day columns leave an undrawn gutter (the collapsed night):
+        # each segment ends before the next one begins.
+        for i in range(n - 1):
+            _, right_i = self._seg_bounds(i, n)
+            left_next, _ = self._seg_bounds(i + 1, n)
+            assert right_i < left_next
+
+    def test_empty_or_tideless_days_return_empty_string(self):
+        assert week_tide_svg([], "m") == ""
+        assert week_tide_svg([{"date": "x", "label": "Mon", "extremes": []}], "m") == ""
+
+    def test_missing_daylight_falls_back_to_full_day(self):
+        days = self._days()
+        for d in days:
+            d["daylight"] = None
+        svg = week_tide_svg(days, "m")
+        assert svg.count('class="tide-week-day"') == len(days)  # still one column per day
 
 
 # ---------------------------------------------------------------------------
@@ -486,9 +590,16 @@ class TestDashboardMarkdown:
         assert "High 14:21 · 4.3 m" in today
         assert "Dawn patrol: 07:00-10:30" in today
 
-    def test_other_sections_are_placeholders(self):
+    def test_forecast_section_lists_seven_days(self):
         md = render_dashboard_markdown(load_package())
-        assert md.count("later update") == 3
+        forecast = md[md.index("## Forecast"):md.index("## Windows")]
+        assert forecast.count("\n- **") == 7  # one bullet per week day
+        assert "**Saturday 2026-07-11** - \U0001f7e2 GO" in forecast
+        assert "1.2 m NW @ 13 s" in forecast  # swell + wind detail
+
+    def test_windows_and_info_sections_are_placeholders(self):
+        md = render_dashboard_markdown(load_package())
+        assert md.count("later update") == 2  # windows + info only
 
     def test_no_tides_falls_back_to_note(self):
         pkg = load_package()
