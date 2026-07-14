@@ -691,6 +691,2196 @@
               }
             }
           ]
+        },
+        {
+          "date": "2026-07-12",
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 0.9,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 0.91,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 0.92,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 0.93,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 0.94,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 0.95,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 0.96,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 0.97,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 0.98,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 0.98,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 0.99,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 1.0,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 0.99,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 0.98,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 0.98,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 0.97,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 0.96,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 0.95,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 0.94,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 0.93,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 0.92,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 0.91,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 0.9,
+              "swell_period_s": 11.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 14,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            }
+          ]
+        },
+        {
+          "date": "2026-07-13",
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 0.4,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 0.4,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 0.41,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 0.41,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 0.42,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 0.42,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 0.43,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 0.43,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 0.43,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 0.44,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 0.44,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 0.45,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 0.45,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 0.44,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 0.44,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 0.43,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 0.43,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 0.43,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 0.42,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 0.42,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 0.41,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 0.41,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 0.4,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 0.4,
+              "swell_period_s": 7.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 22,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            }
+          ]
+        },
+        {
+          "date": "2026-07-14",
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 0.3,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 0.3,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 0.31,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 0.31,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 0.31,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 0.32,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 0.32,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 0.32,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 0.33,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 0.32,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 0.32,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 0.32,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 0.31,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 0.31,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 0.31,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 0.3,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 0.3,
+              "swell_period_s": 6.0,
+              "swell_direction": "W",
+              "swell_direction_deg": 270,
+              "wind_speed": 25,
+              "wind_direction": "W",
+              "wind_direction_deg": 270,
+              "wind_type": "onshore",
+              "quality": {
+                "score": 3.0,
+                "rating": "poor"
+              }
+            }
+          ]
+        },
+        {
+          "date": "2026-07-15",
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 0.8,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 0.81,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 0.82,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 0.83,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 0.83,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 0.84,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 0.85,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 0.86,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 0.87,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 0.88,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 0.88,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 0.89,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 0.89,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 0.88,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 0.88,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 0.87,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 0.86,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 0.85,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 0.84,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 0.83,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 0.83,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 0.82,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 0.81,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 0.8,
+              "swell_period_s": 10.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 12,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            }
+          ]
+        },
+        {
+          "date": "2026-07-16",
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 1.5,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 1.52,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 1.53,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 1.55,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 1.56,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 1.58,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 1.59,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 1.61,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 1.63,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 1.64,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 1.66,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 1.67,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 1.67,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 1.66,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 1.64,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 1.63,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 1.61,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 1.59,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 1.58,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 1.56,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 1.55,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 1.53,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 1.52,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 1.5,
+              "swell_period_s": 14.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 6,
+              "wind_direction": "E",
+              "wind_direction_deg": 90,
+              "wind_type": "offshore",
+              "quality": {
+                "score": 7.0,
+                "rating": "good"
+              }
+            }
+          ]
+        },
+        {
+          "date": "2026-07-17",
+          "hours": [
+            {
+              "time": "00:00",
+              "swell_height": 1.1,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "01:00",
+              "swell_height": 1.11,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "02:00",
+              "swell_height": 1.12,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "03:00",
+              "swell_height": 1.13,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "04:00",
+              "swell_height": 1.15,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "05:00",
+              "swell_height": 1.16,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "06:00",
+              "swell_height": 1.17,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "07:00",
+              "swell_height": 1.18,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "08:00",
+              "swell_height": 1.19,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "09:00",
+              "swell_height": 1.2,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "10:00",
+              "swell_height": 1.21,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "11:00",
+              "swell_height": 1.23,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "12:00",
+              "swell_height": 1.23,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "13:00",
+              "swell_height": 1.21,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "14:00",
+              "swell_height": 1.2,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "15:00",
+              "swell_height": 1.19,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "16:00",
+              "swell_height": 1.18,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "17:00",
+              "swell_height": 1.17,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "18:00",
+              "swell_height": 1.16,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "19:00",
+              "swell_height": 1.15,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "20:00",
+              "swell_height": 1.13,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "21:00",
+              "swell_height": 1.12,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "22:00",
+              "swell_height": 1.11,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            },
+            {
+              "time": "23:00",
+              "swell_height": 1.1,
+              "swell_period_s": 12.0,
+              "swell_direction": "NW",
+              "swell_direction_deg": 315,
+              "wind_speed": 16,
+              "wind_direction": "S",
+              "wind_direction_deg": 180,
+              "wind_type": "cross-shore",
+              "quality": {
+                "score": 5.0,
+                "rating": "fair"
+              }
+            }
+          ]
         }
       ]
     }

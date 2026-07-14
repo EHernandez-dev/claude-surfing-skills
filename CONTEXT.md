@@ -53,8 +53,12 @@ The single self-contained HTML surface for one spot, with in-page tabs (Today, F
 _Avoid_: report, single report, spot page
 
 **Forecast** (Dashboard tab):
-One spot's next 7 days: each day's swell, wind, and verdict, plus a horizontally-compressed 7-day tide chart clipped per day to daylight (first light to last light). About one spot over the week, as opposed to the week planner's ranking across many spots.
+One spot's next 7 days, interactive. A **Week at a glance** overview (a horizontally-compressed 7-day tide chart, each day clipped to daylight, first light to last light) sits above a **By day** list of day rows (weekday, verdict, swell, one-line description); picking a row swaps in that day's full tide chart with its hourly strip. About one spot over the week, as opposed to the week planner's ranking across many spots.
 _Avoid_: outlook, week (for a single spot)
+
+**Mid-tide split** (tide-chart fill):
+The two-tone fill on a tide chart: the band between the curve and a mid-tide reference line is coloured one way above the line (high water) and another below (low water). Shared by the Forecast overview and every per-day/Today chart.
+_Avoid_: gradient, tide shading
 
 **Week planner**:
 The cross-spot view (`/surfing:week`) that ranks the best session windows across all home spots for the coming week, best first. About which spot to surf, as opposed to the Forecast tab's single-spot week.

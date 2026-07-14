@@ -11,11 +11,11 @@ small inline script that shows one panel at a time on click (no refetch; the
 opening tab is chosen by a URL fragment appended when the file is opened). The
 Today panel carries the former single-mode content: a Leaflet map hero with the
 verdict chip and the Python-generated tide curve with the aligned hourly strip,
-both clipped to the target day's daylight. The Forecast panel carries this
-spot's next 7 days (swell / wind / verdict rows) plus a compressed 7-day tide
-chart, each day clipped to its own daylight window. Windows / Spot info are
-placeholders filled by later slices. Dark mode is carried via
-prefers-color-scheme.
+both clipped to the target day's daylight. The Forecast panel is interactive: a
+Week-at-a-glance 7-day tide overview (each day clipped to its own daylight
+window, with the mid-tide two-tone split) above a By-day list of day-selector
+rows whose click swaps in that day's full Today-style chart. Windows / Spot info
+are placeholders filled by later slices.
 
 `--mode week` renders the separate multi-spot Week planner (unchanged).
 
@@ -60,6 +60,10 @@ VERDICT_DISPLAY = {
     "skip": ("\U0001f534", "SKIP"),
 }
 
+# Compact chip labels for the space-tight Forecast day-selector rows (GO / CHECK
+# / SKIP), where "WORTH A CHECK" would not fit the chip column.
+VERDICT_SHORT = {"go": "GO", "check": "CHECK", "skip": "SKIP"}
+
 WEEKDAY_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 WEEKDAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -82,15 +86,18 @@ _SVG_SAMPLES = 120
 _STRIP_H = 116.0
 _STRIP_BAR_MAX = 42.0  # tallest swell bar, in px above its baseline
 
-# Week (Forecast) tide chart geometry: one compressed, daylight-clipped column
-# per forecast day drawn into the same _SVG_W-wide viewBox. Night hours between
-# days are collapsed into the gutter between columns (never drawn), Windguru
-# style. The x span reuses _PAD_L/_PAD_R so the chart lines up with the page.
-_WEEK_SVG_H = 240.0
-_WEEK_PAD_T = 24.0
-_WEEK_PAD_B = 40.0  # room for the per-day weekday labels under the baseline
+# Week (Forecast) "Week at a glance" overview geometry: one compressed,
+# daylight-clipped column per forecast day drawn into the same _SVG_W-wide
+# viewBox. Night hours between days are collapsed into the gutter between
+# columns (never drawn), Windguru style. The x span reuses _PAD_L/_PAD_R so the
+# chart lines up with the page. The chart is ~half the single-day height; the
+# top pad holds the weekday labels drawn above each column, the bottom pad the
+# per-day hour ticks and high/low tide times.
+_WEEK_SVG_H = 132.0
+_WEEK_PAD_T = 34.0
+_WEEK_PAD_B = 34.0
 _WEEK_PLOT_H = _WEEK_SVG_H - _WEEK_PAD_T - _WEEK_PAD_B
-_WEEK_DAY_GAP = 14.0  # blank gutter each column, i.e. the collapsed night
+_WEEK_DAY_GAP = 8.0  # blank gutter each column, i.e. the collapsed night
 _WEEK_DAY_SAMPLES = 48  # curve samples across each day's daylight window
 
 
@@ -246,20 +253,52 @@ def _tide_y_bounds(heights: list[float]) -> tuple[float, float]:
     return min_h - pad, max_h + pad
 
 
-def _curve_and_fill(points: list[tuple[float, float]], plot_bottom: float) -> tuple[str, str]:
-    """The polyline point string and the closed fill path for a sampled curve.
+def _polyline(points: list[tuple[float, float]]) -> str:
+    """The SVG polyline `points` attribute string for a sampled curve."""
+    return " ".join(f"{_fmt(px)},{_fmt(py)}" for px, py in points)
 
-    Shared by both tide charts: `points` are the sampled (x, y) coordinates and
-    `plot_bottom` is the baseline the soft fill drops to. Returns
-    (polyline_points, fill_path_d).
+
+def _mid_level(heights: list[float]) -> float:
+    """The mid-tide reference level: halfway between the lowest and highest."""
+    return (min(heights) + max(heights)) / 2
+
+
+def _mid_clip_defs(
+    id_prefix: str, left: float, top: float, width: float, y_mid: float, bottom: float
+) -> tuple[str, str, str]:
+    """Two clipPaths splitting a plot at the mid-tide line, plus their ids.
+
+    The `high` band is everything above the mid line (top..y_mid), the `low`
+    band everything below it (y_mid..bottom). Ids are prefixed by `id_prefix`
+    so the many charts in one Dashboard document (Today plus every per-day
+    detail chart) never collide, a `url(#..)` reference otherwise resolving to
+    the first (possibly hidden) match and dropping a colour band.
     """
-    line = " ".join(f"{_fmt(px)},{_fmt(py)}" for px, py in points)
-    fill = (
-        f"M {_fmt(points[0][0])},{_fmt(plot_bottom)} "
-        + " ".join(f"L {_fmt(px)},{_fmt(py)}" for px, py in points)
-        + f" L {_fmt(points[-1][0])},{_fmt(plot_bottom)} Z"
+    hi, lo = f"{id_prefix}-tide-hi", f"{id_prefix}-tide-lo"
+    defs = (
+        f'<defs>'
+        f'<clipPath id="{hi}"><rect x="{_fmt(left)}" y="{_fmt(top)}" '
+        f'width="{_fmt(width)}" height="{_fmt(y_mid - top)}" /></clipPath>'
+        f'<clipPath id="{lo}"><rect x="{_fmt(left)}" y="{_fmt(y_mid)}" '
+        f'width="{_fmt(width)}" height="{_fmt(bottom - y_mid)}" /></clipPath>'
+        f'</defs>'
     )
-    return line, fill
+    return defs, hi, lo
+
+
+def _mid_band_paths(points: list[tuple[float, float]], y_mid: float, hi_id: str, lo_id: str) -> str:
+    """The two-tone fill: the band between the curve and the mid line, drawn
+    twice and clipped to the high/low bands so it tints apart above and below.
+    """
+    band = (
+        f"M {_fmt(points[0][0])},{_fmt(y_mid)} "
+        + " ".join(f"L {_fmt(px)},{_fmt(py)}" for px, py in points)
+        + f" L {_fmt(points[-1][0])},{_fmt(y_mid)} Z"
+    )
+    return (
+        f'<path class="tide-fill-high" clip-path="url(#{hi_id})" d="{band}" />'
+        f'<path class="tide-fill-low" clip-path="url(#{lo_id})" d="{band}" />'
+    )
 
 
 def tide_svg(
@@ -270,19 +309,28 @@ def tide_svg(
     hours: list[dict[str, Any]] | None = None,
     swell_unit: str = "m",
     wind_unit: str = "kn",
+    id_prefix: str = "t",
 ) -> str:
     """Render the tide curve as an inline SVG string.
 
     Draws night shading outside first_light..last_light, accent-shaded session
-    windows with their labels, the cosine curve with a soft fill, dotted and
-    labelled tide extremes, and 0-24 h / tide-unit axes. Colours are applied by
-    CSS classes (not inline), so one SVG renders correctly in both light and
-    dark mode. The y axis is scaled to the data and supports negative heights.
+    windows with their labels, the cosine curve with a two-tone mid-tide split
+    fill (see the Mid-tide split vocab: high-water above the mid line, low-water
+    below), a per-hour x-axis (a light gridline every hour, every second hour
+    stronger), dotted and labelled tide extremes, and tide-unit y axes. Colours
+    are applied by CSS classes (not inline), so one SVG renders correctly in
+    both light and dark mode. The y axis is scaled to the data and supports
+    negative heights.
 
     When `hours` is given (per-hour dicts with swell/wind/period/quality, as
     produced by fetch_conditions' marine.days[].hours), an aligned strip is
     drawn below the plot sharing the same x(hour) mapping, so each hour's swell
-    bar and wind arrow line up under the tide curve and session bands.
+    bar and wind arrow line up under the tide curve and session bands. The strip
+    rows are labelled on the left (Swell / Period / Wind with their units).
+
+    `id_prefix` prefixes the mid-tide split's clipPath ids so many charts (the
+    Today chart plus every per-day Forecast detail chart) coexist in one
+    document without their `url(#..)` references colliding.
     """
     y_lo, y_hi = _tide_y_bounds([e["h"] for e in extremes])
 
@@ -343,23 +391,21 @@ def tide_svg(
                 f'y="{_fmt(_PAD_T + 13)}" text-anchor="middle">{html.escape(str(label))}</text>'
             )
 
-    # Axes: baseline, hourly x ticks inside the window, evenly spaced y ticks.
+    # Axes: baseline, then a per-hour x grid (a light vertical gridline every
+    # hour, every second hour stronger), evenly spaced y ticks.
     parts.append(
         f'<line class="tide-axis" x1="{_fmt(_PAD_L)}" y1="{_fmt(plot_bottom)}" '
         f'x2="{_fmt(_PAD_L + _PLOT_W)}" y2="{_fmt(plot_bottom)}" />'
     )
-    tick_step = 2 if span <= 13 else 3
-    start_tick = int(t0) if float(t0).is_integer() else int(t0) + 1
-    while start_tick % tick_step:
-        start_tick += 1
-    for hour in range(start_tick, int(t1) + 1, tick_step):
-        # Skip ticks hugging a cropped endpoint so their labels don't collide
-        # with the dawn/dusk time labels drawn below.
+    for hour in range(math.ceil(t0), int(t1) + 1):
+        # Skip hours hugging a cropped endpoint so their labels don't collide
+        # with the dawn/dusk time labels drawn there.
         if cropped and (hour - t0 < 0.6 or t1 - hour < 0.6):
             continue
         tx = x(hour)
+        grid_cls = "tide-hgrid tide-hgrid-major" if hour % 2 == 0 else "tide-hgrid"
         parts.append(
-            f'<line class="tide-grid" x1="{_fmt(tx)}" y1="{_fmt(_PAD_T)}" '
+            f'<line class="{grid_cls}" x1="{_fmt(tx)}" y1="{_fmt(_PAD_T)}" '
             f'x2="{_fmt(tx)}" y2="{_fmt(plot_bottom)}" />'
         )
         parts.append(
@@ -389,14 +435,22 @@ def tide_svg(
         f'text-anchor="end">{html.escape(unit_label)}</text>'
     )
 
-    # The curve, sampled across the plotted window, plus a soft fill to baseline.
+    # The curve, sampled across the plotted window, with the two-tone mid-tide
+    # split fill (high-water above the mid line, low-water below) and a dashed
+    # mid-tide reference line spanning the plot.
+    y_mid = y(_mid_level([e["h"] for e in extremes]))
     points = []
     for i in range(_SVG_SAMPLES + 1):
         hour = t0 + span * i / _SVG_SAMPLES
         points.append((x(hour), y(tide_height_at(hour, extremes))))
-    line, fill = _curve_and_fill(points, plot_bottom)
-    parts.append(f'<path class="tide-fill" d="{fill}" />')
-    parts.append(f'<polyline class="tide-curve" points="{line}" />')
+    defs, hi_id, lo_id = _mid_clip_defs(id_prefix, _PAD_L, _PAD_T, _PLOT_W, y_mid, plot_bottom)
+    parts.append(defs)
+    parts.append(_mid_band_paths(points, y_mid, hi_id, lo_id))
+    parts.append(
+        f'<line class="tide-mid" x1="{_fmt(_PAD_L)}" y1="{_fmt(y_mid)}" '
+        f'x2="{_fmt(_PAD_L + _PLOT_W)}" y2="{_fmt(y_mid)}" />'
+    )
+    parts.append(f'<polyline class="tide-curve" points="{_polyline(points)}" />')
 
     # Extremes: only real events inside the plotted window (dawn..dusk), labelled.
     for e in extremes:
@@ -440,13 +494,20 @@ def tide_svg(
             f'<line class="strip-sep" x1="{_fmt(_PAD_L)}" y1="{_fmt(strip_top + 8)}" '
             f'x2="{_fmt(_PAD_L + _PLOT_W)}" y2="{_fmt(strip_top + 8)}" />'
         )
+        # Row labels on the left, stacked and carrying their units, so the
+        # crowded right-edge caption is gone (each row reads Swell / Period /
+        # Wind with its unit).
         parts.append(
-            f'<text class="strip-row-label" x="{_fmt(_PAD_L - 8)}" y="{_fmt(bar_base - 14)}" '
-            f'text-anchor="end">Swell</text>'
+            f'<text class="strip-row-label" x="4.00" y="{_fmt(bar_base - 14)}" '
+            f'text-anchor="start">Swell ({html.escape(swell_unit)})</text>'
         )
         parts.append(
-            f'<text class="strip-row-label" x="{_fmt(_PAD_L - 8)}" y="{_fmt(wind_y + 4)}" '
-            f'text-anchor="end">Wind</text>'
+            f'<text class="strip-row-label" x="4.00" y="{_fmt(period_y)}" '
+            f'text-anchor="start">Period (s)</text>'
+        )
+        parts.append(
+            f'<text class="strip-row-label" x="4.00" y="{_fmt(wind_y + 4)}" '
+            f'text-anchor="start">Wind ({html.escape(wind_unit)})</text>'
         )
 
         for idx, h in enumerate(strip_hours):
@@ -508,21 +569,12 @@ def tide_svg(
                     f'text-anchor="middle">{_fmt_label(spd)}</text>'
                 )
 
-        parts.append(
-            f'<text class="strip-unit" x="{_fmt(_PAD_L + _PLOT_W)}" y="{_fmt(period_y)}" '
-            f'text-anchor="end">period s · swell {html.escape(swell_unit)}</text>'
-        )
-        parts.append(
-            f'<text class="strip-unit" x="{_fmt(_PAD_L + _PLOT_W)}" y="{_fmt(wind_lbl_y)}" '
-            f'text-anchor="end">wind {html.escape(wind_unit)}</text>'
-        )
-
     parts.append("</svg>")
     return "".join(parts)
 
 
 def week_tide_svg(days: list[dict[str, Any]], unit_label: str) -> str:
-    """Render a compressed 7-day tide curve, one daylight-clipped column per day.
+    """Render the "Week at a glance" overview: one daylight-clipped column per day.
 
     `days` is the per-day list resolved by `_forecast_view`: each entry carries
     `date`, `label` (weekday abbreviation), `extremes` (the `assemble_extremes`
@@ -531,24 +583,36 @@ def week_tide_svg(days: list[dict[str, Any]], unit_label: str) -> str:
     across that day's first_light..last_light window (a full 0-24 h fallback when
     daylight is absent), so the night hours between days are collapsed into the
     gutter and never drawn (Windguru style). The y scale is shared across all
-    days so heights are comparable, reusing `tide_height_at` for interpolation
-    and the same CSS classes as `tide_svg` so one SVG renders in both themes.
+    days so heights are comparable, reusing `tide_height_at` for interpolation.
+
+    The overview is ~half the single-day height and carries the same mid-tide
+    split as the per-day charts: a dashed mid-tide reference line across the
+    width and a two-tone fill (high-water above it, low-water below). Weekday
+    labels sit above each column; hour ticks and per-day high/low tide times sit
+    below the curve; thin dividers mark the collapsed night between days. The
+    same CSS classes as `tide_svg` are reused so one SVG renders in both themes.
     """
     days = [d for d in days if d.get("extremes")]
     if not days:
         return ""
 
     # A single y scale across every day's extremes keeps columns comparable.
-    y_lo, y_hi = _tide_y_bounds([e["h"] for d in days for e in d["extremes"]])
+    all_heights = [e["h"] for d in days for e in d["extremes"]]
+    y_lo, y_hi = _tide_y_bounds(all_heights)
+    min_h, max_h = min(all_heights), max(all_heights)
+    mid = _mid_level(all_heights)
 
     n = len(days)
     plot_left = _PAD_L
     plot_right = _SVG_W - _PAD_R
-    col_w = (plot_right - plot_left) / n
+    plot_w = plot_right - plot_left
+    col_w = plot_w / n
     plot_bottom = _WEEK_PAD_T + _WEEK_PLOT_H
 
     def y(height: float) -> float:
         return _WEEK_PAD_T + (y_hi - height) / (y_hi - y_lo) * _WEEK_PLOT_H
+
+    y_mid = y(mid)
 
     def day_window(day: dict[str, Any]) -> tuple[float, float]:
         dl = day.get("daylight") or {}
@@ -560,24 +624,31 @@ def week_tide_svg(days: list[dict[str, Any]], unit_label: str) -> str:
     parts: list[str] = [
         f'<svg class="tide-chart tide-week" viewBox="0 0 {_fmt(_SVG_W)} {_fmt(_WEEK_SVG_H)}" '
         f'preserveAspectRatio="xMidYMid meet" role="img" '
-        f'aria-label="Seven-day tide height, each day clipped to its daylight hours">'
+        f'aria-label="Seven-day tide overview, each day clipped to its daylight hours">'
     ]
 
-    # Shared axis: baseline, three height ticks, one unit label on the left.
+    # Mid-tide split clip bands, shared by every day's fill (defined once).
+    defs, hi_id, lo_id = _mid_clip_defs("wk", plot_left, _WEEK_PAD_T, plot_w, y_mid, plot_bottom)
+    parts.append(defs)
+
+    # Shared axis: baseline, low/mid/high height ticks, one unit label, and the
+    # dashed mid-tide reference line spanning the whole width.
     parts.append(
         f'<line class="tide-axis" x1="{_fmt(plot_left)}" y1="{_fmt(plot_bottom)}" '
         f'x2="{_fmt(plot_right)}" y2="{_fmt(plot_bottom)}" />'
     )
-    for i in range(3):
-        hv = y_lo + (y_hi - y_lo) * i / 2
-        ty = y(hv)
+    for hv in (min_h, mid, max_h):
         parts.append(
-            f'<text class="tide-axis-label" x="{_fmt(plot_left - 8)}" y="{_fmt(ty + 3)}" '
+            f'<text class="tide-axis-label" x="{_fmt(plot_left - 8)}" y="{_fmt(y(hv) + 3)}" '
             f'text-anchor="end">{_fmt_height(hv)}</text>'
         )
     parts.append(
         f'<text class="tide-axis-label" x="{_fmt(plot_left - 8)}" y="{_fmt(_WEEK_PAD_T - 10)}" '
         f'text-anchor="end">{html.escape(unit_label)}</text>'
+    )
+    parts.append(
+        f'<line class="tide-mid" x1="{_fmt(plot_left)}" y1="{_fmt(y_mid)}" '
+        f'x2="{_fmt(plot_right)}" y2="{_fmt(y_mid)}" />'
     )
 
     for i, day in enumerate(days):
@@ -596,6 +667,13 @@ def week_tide_svg(days: list[dict[str, Any]], unit_label: str) -> str:
             f'<g class="tide-week-day" data-day="{html.escape(str(day.get("date", "")))}">'
         )
 
+        # Weekday label above the column.
+        parts.append(
+            f'<text class="tide-week-label" x="{_fmt((seg_left + seg_right) / 2)}" '
+            f'y="{_fmt(_WEEK_PAD_T - 21)}" text-anchor="middle">'
+            f'{html.escape(str(day.get("label", "")))}</text>'
+        )
+
         # A divider before every column but the first marks the collapsed night.
         if i > 0:
             div_x = plot_left + i * col_w
@@ -604,29 +682,38 @@ def week_tide_svg(days: list[dict[str, Any]], unit_label: str) -> str:
                 f'x2="{_fmt(div_x)}" y2="{_fmt(plot_bottom)}" />'
             )
 
-        # Curve + soft fill, sampled only across this day's daylight window.
+        # Curve + two-tone mid-tide fill, sampled only across this day's daylight.
         points = [
             (x(t0 + span * s / _WEEK_DAY_SAMPLES), y(tide_height_at(t0 + span * s / _WEEK_DAY_SAMPLES, extremes)))
             for s in range(_WEEK_DAY_SAMPLES + 1)
         ]
-        line, fill = _curve_and_fill(points, plot_bottom)
-        parts.append(f'<path class="tide-fill" d="{fill}" />')
-        parts.append(f'<polyline class="tide-curve" points="{line}" />')
+        parts.append(_mid_band_paths(points, y_mid, hi_id, lo_id))
+        parts.append(f'<polyline class="tide-curve" points="{_polyline(points)}" />')
 
-        # Dots for real events inside this day's daylight window (no labels: the
-        # week chart is a compressed overview; the Today chart carries the times).
+        # Hour ticks every 4 h inside the daylight window, labelled below the axis.
+        for hr in range(math.ceil(t0 / 4.0) * 4, int(t1) + 1, 4):
+            tx = x(hr)
+            parts.append(
+                f'<line class="tide-week-tick" x1="{_fmt(tx)}" y1="{_fmt(plot_bottom)}" '
+                f'x2="{_fmt(tx)}" y2="{_fmt(plot_bottom + 4)}" />'
+            )
+            parts.append(
+                f'<text class="tide-week-hour" x="{_fmt(tx)}" y="{_fmt(plot_bottom + 14)}" '
+                f'text-anchor="middle">{hr:02d}</text>'
+            )
+
+        # High/low tide dots with their times (high time above the dot, low below).
         for e in extremes:
             if e["time"] is None or not (t0 <= e["t"] <= t1):
                 continue
+            ex, ey = x(e["t"]), y(e["h"])
+            parts.append(f'<circle class="tide-dot" cx="{_fmt(ex)}" cy="{_fmt(ey)}" r="2.2" />')
+            ly = max(_WEEK_PAD_T + 8, ey - 6) if e["type"] == "high" else min(plot_bottom - 3, ey + 12)
             parts.append(
-                f'<circle class="tide-dot" cx="{_fmt(x(e["t"]))}" cy="{_fmt(y(e["h"]))}" r="3" />'
+                f'<text class="tide-week-time" x="{_fmt(ex)}" y="{_fmt(ly)}" '
+                f'text-anchor="middle">{html.escape(str(e["time"]))}</text>'
             )
 
-        parts.append(
-            f'<text class="tide-week-label" x="{_fmt((seg_left + seg_right) / 2)}" '
-            f'y="{_fmt(plot_bottom + 18)}" text-anchor="middle">'
-            f'{html.escape(str(day.get("label", "")))}</text>'
-        )
         parts.append("</g>")
 
     parts.append("</svg>")
@@ -648,13 +735,17 @@ def _weekday(iso: str, table: list[str]) -> str:
     return table[date.fromisoformat(iso).weekday()]
 
 
-def _verdict_chip(verdict: str, suffix: str | None = None, extra_class: str = "") -> str:
+def _verdict_chip(verdict: str, suffix: str | None = None, extra_class: str = "", short: bool = False) -> str:
     """A verdict chip: emoji + label (optionally with an uppercase suffix).
 
     Colour comes from the `chip-<verdict>` CSS class; an unknown verdict falls
-    back to the neutral `check` styling but keeps its own uppercased label.
+    back to the neutral `check` styling but keeps its own uppercased label. When
+    `short` is set the compact label (GO / CHECK / SKIP) is used, for the tight
+    Forecast day-selector chips.
     """
     emoji, label = VERDICT_DISPLAY.get(verdict, ("", str(verdict).upper()))
+    if short:
+        label = VERDICT_SHORT.get(verdict, label)
     text = f"{label} · {suffix}" if suffix else label
     kind = verdict if verdict in VERDICT_DISPLAY else "check"
     classes = f"chip chip-{kind}" + (f" {extra_class}" if extra_class else "")
@@ -666,6 +757,7 @@ PAGE_CSS = """
   --page: #eef1f4; --card: #ffffff; --ink: #1a2431; --muted: #5c6b7a;
   --border: #dbe2ea; --accent: #2b7cd3; --night: rgba(28, 42, 60, 0.09);
   --go: #16a35d; --check: #e8a41d; --skip: #d84a35;
+  --tide-high: #2b7cd3; --tide-low: #1fa971;
   --overlay-bg: rgba(12, 20, 31, 0.82); --overlay-ink: #f4f7fb;
   --warn-bg: #fbecdf; --warn-border: #e6b8a6; --warn-ink: #8a3a25;
 }
@@ -674,6 +766,7 @@ PAGE_CSS = """
     --page: #0d1520; --card: #14202e; --ink: #e8eef7; --muted: #93a4b7;
     --border: #1e2c3d; --accent: #4d9be6; --night: rgba(0, 0, 0, 0.34);
     --go: #16c86a; --check: #f2b62c; --skip: #e2543f;
+    --tide-high: #4d9be6; --tide-low: #2fd39a;
     --overlay-bg: rgba(6, 12, 20, 0.86); --overlay-ink: #f4f7fb;
     --warn-bg: #2a1a16; --warn-border: #4a2c22; --warn-ink: #f2b8a4;
   }
@@ -714,7 +807,11 @@ body {
 .tide-grid { stroke: var(--border); stroke-width: 1; }
 .tide-axis { stroke: var(--border); stroke-width: 1.5; }
 .tide-axis-label { fill: var(--muted); font-size: 11px; }
-.tide-fill { fill: var(--accent); opacity: 0.14; }
+.tide-fill-high { fill: var(--tide-high); opacity: 0.28; }
+.tide-fill-low { fill: var(--tide-low); opacity: 0.28; }
+.tide-mid { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.55; }
+.tide-hgrid { stroke: var(--border); stroke-width: 0.5; opacity: 0.4; }
+.tide-hgrid-major { stroke-width: 0.9; opacity: 0.8; }
 .tide-curve { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
 .tide-dot { fill: var(--accent); }
 .tide-extreme-label { fill: var(--ink); font-size: 11px; font-weight: 600; }
@@ -834,8 +931,31 @@ DASHBOARD_CSS = """
 .panel[hidden] { display: none; }
 .placeholder { color: var(--muted); }
 .tide-week { margin-top: 6px; }
-.tide-week-divider { stroke: var(--border); stroke-width: 1; }
-.tide-week-label { fill: var(--muted); font-size: 11px; font-weight: 600; }
+.tide-week .tide-curve { stroke-width: 1.3; }
+.tide-week-divider { stroke: var(--border); stroke-width: 0.5; opacity: 0.6; }
+.tide-week-label { fill: var(--ink); font-size: 12px; font-weight: 700; }
+.tide-week-tick { stroke: var(--border); stroke-width: 1; }
+.tide-week-hour { fill: var(--muted); font-size: 9px; }
+.tide-week-time { fill: var(--ink); font-size: 8.5px; font-weight: 600; }
+.fc-crows { margin: 4px 0 16px; }
+.fc-crow {
+  display: flex; align-items: center; gap: 14px; width: 100%; font: inherit; cursor: pointer;
+  text-align: left; background: transparent; color: var(--ink); border: none;
+  border-top: 1px solid var(--border); padding: 11px 8px;
+}
+.fc-crow:first-of-type { border-top: none; }
+.fc-crow:hover { background: var(--page); }
+.fc-crow.active { background: var(--page); box-shadow: inset 3px 0 0 var(--accent); }
+.fc-crow .d { font-weight: 800; width: 62px; flex: none; }
+.fc-crow .chipcol { width: 118px; flex: none; }
+.fc-crow .sw { width: 128px; flex: none; color: var(--muted); font-size: 0.88rem; }
+.fc-crow .desc { flex: 1; color: var(--muted); font-size: 0.9rem; }
+.fc-detail[hidden] { display: none; }
+.fc-detail h3 { margin: 6px 0 8px; font-size: 1.05rem; }
+@media (max-width: 760px) {
+  .fc-crow { flex-wrap: wrap; }
+  .fc-crow .sw, .fc-crow .desc { width: auto; flex-basis: 100%; }
+}
 """
 
 # The map init is a few inline lines. Literal {z}/{x}/{y} in the tile template
@@ -908,6 +1028,26 @@ TOGGLE_JS = """(function () {
   });
   window.addEventListener('hashchange', fromHash);
   fromHash();
+})();"""
+
+# Forecast day selector: every day's detail chart is already in the DOM (one
+# .fc-detail per day, all but the first hidden). Clicking a .fc-crow row shows
+# that day's chart and hides the rest, and marks the row active. Scoped to the
+# Forecast panel so it never touches the Today tab; no data is fetched on click.
+FORECAST_JS = """(function () {
+  var panel = document.getElementById('panel-forecast');
+  if (!panel) { return; }
+  panel.addEventListener('click', function (e) {
+    var btn = e.target.closest('.fc-crow');
+    if (!btn || !panel.contains(btn)) { return; }
+    var day = btn.getAttribute('data-day');
+    panel.querySelectorAll('.fc-crow').forEach(function (b) {
+      b.classList.toggle('active', b === btn);
+    });
+    panel.querySelectorAll('.fc-detail').forEach(function (d) {
+      d.hidden = (d.getAttribute('data-day') !== day);
+    });
+  });
 })();"""
 
 # The four dashboard tabs, in fixed display order.
@@ -1018,12 +1158,16 @@ def _target_day_events(tide_days: list[dict[str, Any]] | None, target_date: str 
 def _forecast_view(package: dict[str, Any]) -> dict[str, Any]:
     """Resolve the shared Forecast values used by both the HTML and Markdown twins.
 
-    Pairs each `analysis.week` row with that day's assembled tide extremes and
-    daylight window so the Forecast panel and its flat Markdown twin never drift.
-    All three inputs already live in the payload: `analysis.week` (per-day
-    swell/wind/verdict, already corrected to the spot's works-on profile),
-    `conditions.tides.days` (per-day extremes) and `conditions.daylight.days`
-    (per-day first/last light). No fetch_conditions.py change is required.
+    Pairs each `analysis.week` row with that day's assembled tide extremes,
+    daylight window and hourly marine data so the interactive Forecast panel and
+    its flat Markdown twin never drift. Every input already lives in the payload:
+    `analysis.week` (per-day swell/wind/verdict, already corrected to the spot's
+    works-on profile), `conditions.tides.days` (per-day extremes),
+    `conditions.daylight.days` (per-day first/last light) and
+    `conditions.marine.days[].hours` (per-day hourly strip data, emitted for all
+    seven days by `build_marine_days`). No `fetch_conditions.py` change is
+    required. Only the target day carries session windows (they are computed for
+    the target day), so per-day detail charts shade windows on that day alone.
     """
     conditions = package.get("conditions", {})
     analysis = package.get("analysis", {})
@@ -1036,22 +1180,36 @@ def _forecast_view(package: dict[str, Any]) -> dict[str, Any]:
         for row in conditions.get("daylight", {}).get("days", [])
         if row.get("date") and "first_light" in row and "last_light" in row
     }
+    hours_by_date = {
+        md["date"]: (md.get("hours") or [])
+        for md in conditions.get("marine", {}).get("days", [])
+        if md.get("date")
+    }
+
+    target = analysis.get("target_day") or {}
+    target_date = target.get("date") or conditions.get("report", {}).get("target_date")
+    target_windows = target.get("windows") or []
 
     week = analysis.get("week") or []
     days = []
     for entry in week:
         d = entry.get("date")
+        is_target = bool(d) and d == target_date
         days.append({
             "date": d,
             "label": _weekday(d, WEEKDAY_ABBR) if d else "",
             "extremes": assemble_extremes(tide_days, d) if (tide_days and d) else [],
             "daylight": daylight_by_date.get(d),
+            "hours": hours_by_date.get(d, []),
+            "windows": target_windows if is_target else [],
             "entry": entry,
         })
     return {
         "week": week,
         "days": days,
         "tide_unit": units.get("tide_height", "m"),
+        "swell_unit": units.get("wave_height", "m"),
+        "wind_unit": units.get("wind_speed", "kn"),
         "tide_source": tides.get("source"),
         "has_tides": any(day["extremes"] for day in days),
     }
@@ -1108,13 +1266,19 @@ def _today_panel_html(view: dict[str, Any]) -> tuple[str, str]:
 
 
 def _forecast_panel_html(view: dict[str, Any]) -> str:
-    """Build the Forecast panel body: this spot's next 7 days plus a 7-day tide chart.
+    """Build the interactive Forecast panel: a week overview plus a by-day drilldown.
 
     Takes the resolved `_forecast_view` dict (mirroring how `_today_panel_html`
-    takes the resolved `_target_day_view`), so the caller resolves once. Each day
-    row carries its swell, wind and (works-on-corrected) verdict from
-    `analysis.week`; the single compressed tide chart below draws one
-    daylight-clipped column per day via `week_tide_svg`.
+    takes the resolved `_target_day_view`), so the caller resolves once. Two
+    stacked cards:
+
+    - **Week at a glance**: the compressed 7-day tide overview (`week_tide_svg`),
+      each day a daylight-clipped column with the mid-tide split.
+    - **By day**: a list of day-selector rows (weekday, works-on-corrected GO /
+      CHECK / SKIP chip, swell, the day's one-line description). Clicking a row
+      swaps in that day's full Today-style tide chart below, in the same card;
+      the first day is selected by default. All charts are pre-rendered into the
+      document, so the toggle (see FORECAST_JS) never refetches.
     """
     esc = html.escape
 
@@ -1125,38 +1289,63 @@ def _forecast_panel_html(view: dict[str, Any]) -> str:
             "</section></main>"
         )
 
-    rows = []
-    for entry in view["week"]:
-        d = entry.get("date")
-        day_label = f"{_weekday(d, WEEKDAY_ABBR)} {date.fromisoformat(d).day}" if d else "?"
-        chip = _verdict_chip(entry.get("verdict", "check"), extra_class="week-verdict")
-        detail = _entry_detail(entry)
-        rows.append(
-            f'<div class="week-row"><div class="week-day">{esc(day_label)}</div>'
-            f'<div class="week-chip">{chip}</div>'
-            f'<div class="week-detail">{esc(detail)}</div></div>'
-        )
-    days_section = (
-        '<section class="card"><h2>Next 7 days</h2>'
-        '<p class="sub">Verdicts corrected to this spot\'s works-on profile.</p>'
-        f'{"".join(rows)}</section>'
-    )
-
+    # --- Week at a glance ---------------------------------------------------
     if view["has_tides"]:
         source = f"{view['tide_source']}. " if view["tide_source"] else ""
-        chart_section = (
-            '<section class="card"><h2>7-day tide</h2>'
+        overview = (
+            '<section class="card"><h2>Week at a glance</h2>'
             f'<p class="sub">{esc(source)}Each day clipped to its daylight hours '
             "(first light to last light); night hours are not drawn.</p>"
             f'{week_tide_svg(view["days"], view["tide_unit"])}</section>'
         )
     else:
-        chart_section = (
-            '<section class="card"><h2>7-day tide</h2>'
+        overview = (
+            '<section class="card"><h2>Week at a glance</h2>'
             '<p class="tide-note">No automated tide data for this spot.</p></section>'
         )
 
-    return f'<main class="wrap">\n{days_section}\n{chart_section}\n</main>'
+    # --- By day: selector rows + pre-rendered per-day detail charts ---------
+    rows, details = [], []
+    for i, day in enumerate(view["days"]):
+        entry = day["entry"]
+        d = day["date"]
+        verdict = entry.get("verdict", "check")
+        short_label = f"{day['label']} {date.fromisoformat(d).day}" if d else "?"
+        full_label = f"{_weekday(d, WEEKDAY_FULL)} {d}" if d else "This day"
+        chip = _verdict_chip(verdict, extra_class="week-verdict", short=True)
+        swell = str(entry.get("swell", ""))
+        why = str(entry.get("why") or "")
+        active = " active" if i == 0 else ""
+        rows.append(
+            f'<button class="fc-crow{active}" type="button" data-day="{i}">'
+            f'<span class="d">{esc(short_label)}</span>'
+            f'<span class="chipcol">{chip}</span>'
+            f'<span class="sw">{esc(swell)}</span>'
+            f'<span class="desc">{esc(why)}</span></button>'
+        )
+
+        if day["extremes"]:
+            chart = tide_svg(
+                day["extremes"], day["windows"], day["daylight"], view["tide_unit"],
+                day["hours"], view["swell_unit"], view["wind_unit"], id_prefix=f"fc{i}",
+            )
+        else:
+            chart = '<p class="tide-note">No tide data for this day.</p>'
+        hidden = "" if i == 0 else " hidden"
+        details.append(
+            f'<div class="fc-detail" data-day="{i}"{hidden}>'
+            f'<h3>{esc(full_label)} tide &amp; session</h3>{chart}</div>'
+        )
+
+    by_day = (
+        '<section class="card"><h2>By day</h2>'
+        '<p class="sub">Verdicts corrected to this spot\'s works-on profile. '
+        "Pick a day for its full tide chart and hourly strip.</p>"
+        f'<div class="fc-crows">{"".join(rows)}</div>'
+        f'<div class="fc-details">{"".join(details)}</div></section>'
+    )
+
+    return f'<main class="wrap">\n{overview}\n{by_day}\n</main>'
 
 
 def render_dashboard(package: dict[str, Any]) -> str:
@@ -1235,6 +1424,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"<script>{leaflet_js}</script>\n"
         f"<script>{map_js}</script>\n"
         f"<script>{TOGGLE_JS}</script>\n"
+        f"<script>{FORECAST_JS}</script>\n"
         "</body>\n</html>\n"
     )
 

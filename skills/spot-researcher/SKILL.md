@@ -653,12 +653,15 @@ mode; it supersedes the retired `single` mode.
 3. The script prints JSON on exit 0 either way:
    - Success: `{"html_path": "reports/{target-date}-{spot-slug}-dashboard.html", "md_path": "reports/{target-date}-{spot-slug}-dashboard.md"}`.
      It writes the self-contained HTML Dashboard plus a paired flat Markdown twin (the four views
-     stacked; the Today and Forecast sections are populated). The Forecast panel carries this
-     spot's next 7 days (swell / wind / verdict from `analysis.week`) plus one compressed 7-day
-     tide chart, each day clipped to its own first-light-to-last-light window (built entirely from
-     the existing `conditions.tides.days`, `conditions.daylight.days` and `analysis.week`; no
-     `fetch_conditions.py` change). The dashboard name is stable (no verdict slug), so a re-run the
-     same day overwrites both files.
+     stacked; the Today and Forecast sections are populated). The Forecast panel is interactive: a
+     **Week at a glance** overview (a compressed 7-day tide chart, each day clipped to its own
+     first-light-to-last-light window with the mid-tide two-tone split) above a **By day** list of
+     day-selector rows (weekday, works-on-corrected GO / CHECK / SKIP verdict from `analysis.week`,
+     swell, a one-line description); picking a row swaps in that day's full Today-style tide chart
+     and hourly strip below. It is built entirely from existing payload (`conditions.tides.days`,
+     `conditions.daylight.days`, `conditions.marine.days[].hours` and `analysis.week`; no
+     `fetch_conditions.py` change). The Markdown twin has no interaction: it lists the seven days.
+     The dashboard name is stable (no verdict slug), so a re-run the same day overwrites both files.
    - Soft failure: `{"error": ..., "note": ...}`. The markdown report/twin remain readable; note the
      failure to the user and continue, do not block on it.
 4. Open the HTML for the user on the Today tab (Today is the default, no fragment needed):

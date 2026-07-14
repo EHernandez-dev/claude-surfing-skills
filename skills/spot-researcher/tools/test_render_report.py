@@ -306,18 +306,61 @@ class TestTideSvg:
         cx = self._x_at(7.0)
         assert f'rotate(270.00 {cx:.2f} ' in svg
 
+    def test_mid_tide_split_fill_present(self):
+        # The two-tone mid-tide split: a high band and a low band, both clipped,
+        # plus a dashed mid line. No plain single-tone baseline fill remains.
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
+        assert 'class="tide-fill-high"' in svg
+        assert 'class="tide-fill-low"' in svg
+        assert 'class="tide-mid"' in svg
+        assert 'class="tide-fill"' not in svg  # old baseline fill is gone
+
+    def test_mid_tide_clip_ids_use_prefix(self):
+        # Clip ids carry the id_prefix so many charts coexist in one document.
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", id_prefix="fc3")
+        assert 'id="fc3-tide-hi"' in svg
+        assert 'clip-path="url(#fc3-tide-hi)"' in svg
+        assert 'id="fc3-tide-lo"' in svg
+        # a different prefix yields non-colliding ids
+        other = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", id_prefix="t")
+        assert 'id="t-tide-hi"' in other and 'id="fc3-tide-hi"' not in other
+
+    def test_per_hour_x_axis(self):
+        # A light vertical gridline every hour inside the daylight window, with
+        # every second (even) hour drawn stronger; the old coarse grid is gone.
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m")
+        assert 'class="tide-grid"' not in svg
+        assert 'class="tide-hgrid"' in svg
+        assert 'class="tide-hgrid tide-hgrid-major"' in svg
+        # 06:12-22:23 daylight -> hours 07..22 (endpoints inside 0.6 h skipped),
+        # so both odd (minor) and even (major) hour gridlines are present.
+        assert svg.count('class="tide-hgrid"') >= 1
+        assert svg.count('tide-hgrid-major') >= 1
+
+    def test_strip_row_labels_relabeled_left_with_units(self):
+        svg = tide_svg(self.EXTREMES, self.WINDOWS, self.DAYLIGHT, "m", self.HOURS, "m", "km/h")
+        assert ">Swell (m)</text>" in svg
+        assert ">Period (s)</text>" in svg
+        assert ">Wind (km/h)</text>" in svg
+        # the crowded right-edge unit caption is gone
+        assert 'class="strip-unit"' not in svg
+
 
 class TestHourlyStripInDashboard:
+    def _today_slice(self, out):
+        return out[out.index('id="panel-today"'):out.index('id="panel-forecast"')]
+
     def test_clips_to_daylight_hours(self):
-        # Fixture marine day carries 24 hours; the chart spans dawn..dusk
-        # (06:12-22:23), so only hours 07..22 fall inside it: 16 bars.
-        html = render_dashboard(load_package())
-        assert html.count('class="strip-bar') == 16
+        # Fixture marine day carries 24 hours; the Today chart spans dawn..dusk
+        # (06:12-22:23), so only hours 07..22 fall inside it: 16 bars. (The
+        # Forecast panel draws its own per-day strips; scope to Today here.)
+        today = self._today_slice(render_dashboard(load_package()))
+        assert today.count('class="strip-bar') == 16
 
     def test_strip_absent_without_marine_hours(self):
         pkg = load_package()
         pkg["conditions"]["marine"] = {"days": []}
-        # No SVG bars emitted (the CSS class definitions always exist).
+        # No SVG bars emitted anywhere (the CSS class definitions always exist).
         assert 'class="strip-bar' not in render_dashboard(pkg)
 
 
@@ -390,28 +433,66 @@ class TestForecastPanel:
     def _forecast_slice(self, out):
         return out[out.index('id="panel-forecast"'):out.index('id="panel-windows"')]
 
-    def test_seven_day_rows_with_verdict_swell_wind(self):
+    def test_week_at_a_glance_overview(self):
         fc = self._forecast_slice(render_dashboard(load_package()))
-        assert fc.count('class="week-row"') == 7
-        # verdicts corrected to the spot: go/check/skip all appear in the fixture
-        assert "chip-go" in fc and "chip-check" in fc and "chip-skip" in fc
-        # swell + wind detail from analysis.week rows
-        assert "1.2 m NW @ 13 s" in fc
-        assert "8 km/h offshore" in fc
-
-    def test_single_week_tide_chart_with_seven_daylight_columns(self):
-        fc = self._forecast_slice(render_dashboard(load_package()))
+        assert "Week at a glance" in fc
+        # one compressed 7-day overview, one column per day
         assert fc.count('class="tide-chart tide-week"') == 1
         assert fc.count('class="tide-week-day"') == 7
-        assert "7-day tide" in fc
         assert "night hours are not drawn" in fc  # daylight-clipping stated
+        # refinements: mid-tide split (dashed mid line + two-tone), weekday
+        # labels above each column, hour ticks and per-day high/low tide times
+        assert 'class="tide-mid"' in fc
+        assert 'class="tide-fill-high"' in fc and 'class="tide-fill-low"' in fc
+        assert 'class="tide-week-label"' in fc
+        assert 'class="tide-week-tick"' in fc
+        assert 'class="tide-week-time"' in fc
+
+    def test_by_day_seven_selector_rows(self):
+        fc = self._forecast_slice(render_dashboard(load_package()))
+        assert "By day" in fc
+        assert fc.count('<button class="fc-crow') == 7
+        # verdicts corrected to the spot: go/check/skip all appear in the fixture
+        assert "chip-go" in fc and "chip-check" in fc and "chip-skip" in fc
+        # compact GO / CHECK / SKIP chip labels (not the long "WORTH A CHECK")
+        assert "CHECK" in fc and "WORTH A CHECK" not in fc
+        # swell + one-line description from analysis.week rows
+        assert "1.2 m NW @ 13 s" in fc
+        assert "clean groundswell, light offshore, pushing tide" in fc
+
+    def test_first_day_selected_by_default(self):
+        fc = self._forecast_slice(render_dashboard(load_package()))
+        assert fc.count('class="fc-detail"') == 7
+        # the first row is active; its detail chart is shown (not hidden) while
+        # the other six detail blocks are hidden until selected.
+        assert '<button class="fc-crow active"' in fc
+        assert '<div class="fc-detail" data-day="0">' in fc
+        for i in range(1, 7):
+            assert f'<div class="fc-detail" data-day="{i}" hidden>' in fc
+
+    def test_detail_charts_carry_strip_and_relabels_with_unique_clips(self):
+        fc = self._forecast_slice(render_dashboard(load_package()))
+        # every day now carries hourly data, so each detail chart has a strip
+        assert fc.count('class="strip-bar') == 7 * 16
+        assert ">Swell (m)</text>" in fc
+        assert ">Period (s)</text>" in fc
+        assert ">Wind (km/h)</text>" in fc
+        # unique clip-path ids per day so no url(#..) collision drops a band
+        for i in range(7):
+            assert f'id="fc{i}-tide-hi"' in fc
+
+    def test_day_selector_toggle_script_present(self):
+        out = render_dashboard(load_package())
+        assert "panel-forecast" in out
+        assert ".fc-crow" in out
+        assert "d.hidden" in out  # swaps which detail is shown
 
     def test_no_tide_data_keeps_rows_and_degrades_chart(self):
         pkg = load_package()
         pkg["conditions"]["tides"] = {"error": "no station", "note": "manual"}
         fc = self._forecast_slice(render_dashboard(pkg))
-        assert fc.count('class="week-row"') == 7  # rows unaffected
-        assert "tide-week" not in fc  # chart degrades to a note
+        assert fc.count('<button class="fc-crow') == 7  # rows unaffected
+        assert "tide-week" not in fc  # overview degrades to a note
         assert "No automated tide data" in fc
 
     def test_empty_week_renders_placeholder(self):
@@ -487,6 +568,34 @@ class TestWeekTideSvg:
             d["daylight"] = None
         svg = week_tide_svg(days, "m")
         assert svg.count('class="tide-week-day"') == len(days)  # still one column per day
+
+    def test_overview_refinements_present(self):
+        days = self._days()
+        svg = week_tide_svg(days, "m")
+        # one dashed mid line across the whole width, shared two-tone clip bands
+        assert svg.count('class="tide-mid"') == 1
+        assert 'id="wk-tide-hi"' in svg and 'id="wk-tide-lo"' in svg
+        assert svg.count('class="tide-fill-high"') == len(days)  # one band per day
+        assert svg.count('class="tide-fill-low"') == len(days)
+        # weekday labels, hour ticks and per-day high/low tide times
+        assert svg.count('class="tide-week-label"') == len(days)
+        assert 'class="tide-week-tick"' in svg
+        assert 'class="tide-week-time"' in svg
+
+    def test_weekday_label_sits_above_each_column(self):
+        days = self._days()
+        svg = week_tide_svg(days, "m")
+        # the weekday label y is above the plot top (in the top pad), not below
+        # the baseline as the old design placed it.
+        label_y = render_report._WEEK_PAD_T - 21
+        assert f'class="tide-week-label" x=' in svg
+        assert f'y="{label_y:.2f}"' in svg
+
+    def test_half_height_viewbox(self):
+        svg = week_tide_svg(self._days(), "m")
+        # the overview is ~half the single-day chart height
+        assert render_report._WEEK_SVG_H == 132.0
+        assert f'viewBox="0 0 {render_report._SVG_W:.2f} 132.00"' in svg
 
 
 # ---------------------------------------------------------------------------
