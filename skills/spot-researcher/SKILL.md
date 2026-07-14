@@ -15,8 +15,10 @@ The plugin reads and writes everything relative to the user's working directory 
 
 - `surfer.yaml` - the surfer profile: skill level, comfort zone, boards, home spots, unit preference, target-day defaults (example to copy: `assets/surfer-template.yaml`). When present, verdicts are made for this surfer, not a generic expert, and its `units` preference applies (precedence: `--units` flag, then surfer profile, then metric).
 - `spots/<slug>.yaml` - one spot profile per researched spot (schema: `assets/spot-profile-template.yaml`): works-on profile, coordinates, facing, tide source, pinned buoy, webcams, hazard one-liners, `last_researched`. Every research run writes or updates it (Phase 7). Profiles never expire: always state the profile's age when using one, and suggest re-research past ~6 months.
-- `reports/` - generated reports, named `{target-date}-{spot-slug}-{verdict}.md`, each with a
-  sibling `{target-date}-{spot-slug}-{verdict}.html` (the deterministic visual report, Step 6C).
+- `reports/` - generated reports, named `{target-date}-{spot-slug}-{verdict}.md`, plus the
+  deterministic per-spot **Dashboard** `{target-date}-{spot-slug}-dashboard.html` (stable name, no
+  verdict slug; a re-run the same day overwrites it) and its paired flat Markdown twin
+  `{target-date}-{spot-slug}-dashboard.md` (Step 6C).
 - `sessions/` - the surfer's own session logs.
 - `forecasts/<slug>.jsonl` - append-only forecast snapshots per spot (`fetch_conditions.py --archive`), the forecast side of the verification loop (`/surfing:verify`). Machine-appended JSONL, kept out of `spots/` so hand-edited YAML and machine data never share a directory.
 
@@ -635,27 +637,32 @@ Task(
 - **PASS or PASS_WITH_FIXES:** Proceed to Step 6C with the `report_path`
 - **FAIL:** Present `remaining_issues` to the user and ask for guidance
 
-#### Step 6C: Render the Visual Report
+#### Step 6C: Render the Dashboard
 
-Once the markdown report passes review, render the deterministic HTML companion:
+Once the markdown report passes review, render the deterministic per-spot **Dashboard** (the
+tabbed HTML surface: Today / Forecast / Windows / Spot info). `dashboard` is the default render
+mode; it supersedes the retired `single` mode.
 
 1. Write the Step 5A data package (including the `analysis` block) to a JSON file (a temp path is fine).
-2. Run, from the user's working directory (the surf folder), so the HTML lands next to the
-   markdown report:
+2. Run, from the user's working directory (the surf folder), so the files land in `reports/`:
 
    ```bash
-   uv run --project "{repo_root}/skills/spot-researcher/tools" python "{repo_root}/skills/spot-researcher/tools/render_report.py" --data {abs path to package.json}
+   uv run --project "{repo_root}/skills/spot-researcher/tools" python "{repo_root}/skills/spot-researcher/tools/render_report.py" --data {abs path to package.json} --mode dashboard
    ```
 
 3. The script prints JSON on exit 0 either way:
-   - Success: `{"html_path": "reports/{target-date}-{spot-slug}-{verdict}.html"}`
-   - Soft failure: `{"error": ..., "note": ...}`. The markdown report remains canonical; note the
+   - Success: `{"html_path": "reports/{target-date}-{spot-slug}-dashboard.html", "md_path": "reports/{target-date}-{spot-slug}-dashboard.md"}`.
+     It writes the self-contained HTML Dashboard plus a paired flat Markdown twin (the four views
+     stacked; the Today section is populated). The dashboard name is stable (no verdict slug), so a
+     re-run the same day overwrites both files.
+   - Soft failure: `{"error": ..., "note": ...}`. The markdown report/twin remain readable; note the
      failure to the user and continue, do not block on it.
-4. Open the HTML for the user: `open {html_path}` on macOS, `xdg-open {html_path}` on Linux.
+4. Open the HTML for the user on the Today tab (Today is the default, no fragment needed):
+   `open {html_path}` on macOS, `xdg-open {html_path}` on Linux.
 
 #### Week Mode: The Multi-Spot Data Package
 
-`render_report.py` has a second mode, `--mode week`, that renders one multi-spot dashboard instead of a single spot report. Its producer is the `/surfing:week` command (`commands/week.md`), not this research workflow; that command sweeps the surfer's home spots, ranks the week, and assembles the package below. It is documented here because `render_report.py` consumes it, so the schema is a contract that both sides share, the same normative tone as Step 5A.
+`render_report.py` has a second mode, `--mode week`, that renders the multi-spot Week planner instead of a per-spot Dashboard. Its producer is the `/surfing:week` command (`commands/week.md`), not this research workflow; that command sweeps the surfer's home spots, ranks the week, and assembles the package below. It is documented here because `render_report.py` consumes it, so the schema is a contract that both sides share, the same normative tone as Step 5A.
 
 The **week data package** MUST match this schema exactly:
 
@@ -690,7 +697,7 @@ Invocation, run from the surf folder like Step 6C:
 uv run --project "{repo_root}/skills/spot-researcher/tools" python "{repo_root}/skills/spot-researcher/tools/render_report.py" --data {abs path to package.json} --mode week
 ```
 
-The renderer writes `reports/{week.start}-week.html` relative to the surf folder; `--out` overrides the path. Exit-0 soft-failure contract as in Step 6C: on trouble it prints `{"error": ..., "note": ...}` and the markdown dashboard remains canonical.
+The renderer writes `reports/{week.start}-week.html` relative to the surf folder; `--out` overrides the path. Exit-0 soft-failure contract as in Step 6C: on trouble it prints `{"error": ..., "note": ...}` and the week data package remains readable directly.
 
 ### Phase 7: Spot Profile Update
 
@@ -718,8 +725,8 @@ If the profile already exists, update it in place, preserving hand-edits that do
 Report to user:
 
 1. **Success message:** "Spot research complete for {Spot Name}"
-2. **File locations:** Full absolute path to the generated report, the HTML visual report from
-   Step 6C, and the spot profile written/updated in Phase 7
+2. **File locations:** Full absolute path to the generated report, the HTML Dashboard (and its
+   Markdown twin) from Step 6C, and the spot profile written/updated in Phase 7
 3. **Summary:** 2-3 sentences - break type and skill level, this week's best window, key hazards or gaps
 4. **Next steps:** Encourage the user to:
    - Check the free webcam (if found) before driving
@@ -733,7 +740,7 @@ Report to user:
 Spot research complete for Ocean Beach (SF)!
 
 Report saved to: reports/2026-07-09-ocean-beach-sf-go.md
-Visual report saved to: reports/2026-07-09-ocean-beach-sf-go.html (opened for you)
+Dashboard saved to: reports/2026-07-09-ocean-beach-sf-dashboard.html (opened for you)
 Spot profile saved to: spots/ocean-beach-sf.yaml (future conditions checks skip re-research)
 
 Summary: Ocean Beach is a heavy, shifty beach break for advanced surfers - powerful rips,

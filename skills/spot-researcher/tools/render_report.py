@@ -2,13 +2,20 @@
 """Deterministic HTML surf-report renderer for the spot-researcher skill.
 
 Takes a Phase 5A data-package JSON (the fetch_conditions.py payload plus the
-skill's spot_data and analysis) and writes one self-contained HTML file next
-to the Markdown report, sharing its basename with a .html extension.
+skill's spot_data and analysis) and writes one self-contained tabbed HTML
+Dashboard plus a paired flat Markdown twin sharing its basename.
 
-Design is fixed by the prototype verdict (an A/C hybrid on C's light palette):
-a Leaflet map hero, a Python-generated tide curve with night shading and
-shaded session windows, a week-at-a-glance table, webcam cards, always-visible
-hazards, and a safety footer. Dark mode is carried via prefers-color-scheme.
+The Dashboard (`--mode dashboard`, the default per-spot mode) is one file with a
+four-button tab bar (Today / Forecast / Windows / Spot info), four panels, and a
+small inline script that shows one panel at a time on click (no refetch; the
+opening tab is chosen by a URL fragment appended when the file is opened). The
+Today panel carries the former single-mode content: a Leaflet map hero with the
+verdict chip and the Python-generated tide curve with the aligned hourly strip,
+both clipped to the target day's daylight. Forecast / Windows / Spot info are
+placeholders filled by later slices. Dark mode is carried via
+prefers-color-scheme.
+
+`--mode week` renders the separate multi-spot Week planner (unchanged).
 
 Determinism is a hard requirement (golden-file tests compare byte-for-byte):
 there are no wall-clock reads anywhere in the output path. Weekday names come
@@ -164,18 +171,23 @@ def tide_height_at(t: float, extremes: list[dict[str, Any]]) -> float:
     return extremes[-1]["h"]
 
 
-def html_output_path(package: dict[str, Any]) -> str:
-    """Default output path: the verdict's Markdown report with .html swapped in.
+def dashboard_output_path(package: dict[str, Any]) -> str:
+    """Default dashboard output path: reports/<date>-<slug>-dashboard.html.
 
-    The filename is `conditions.report.filenames[verdict]` where `verdict` is
-    `analysis.target_day.verdict`. Raises KeyError/TypeError when either piece
-    is missing so the CLI can turn it into the soft-failure JSON.
+    Derived from `conditions.report.filenames[verdict]` (e.g.
+    reports/2026-07-11-mundaka-go.md) by dropping the `-<verdict>.md` suffix and
+    appending `-dashboard.html`, so the name carries the target date and spot
+    slug but no verdict slug: one stable dashboard per spot per day that a re-run
+    overwrites. Raises KeyError/TypeError when the verdict or filenames are
+    missing so the CLI can turn it into the soft-failure JSON.
     """
     verdict = package["analysis"]["target_day"]["verdict"]
     md_path = package["conditions"]["report"]["filenames"][verdict]
-    if md_path.endswith(".md"):
-        return md_path[: -len(".md")] + ".html"
-    return md_path + ".html"
+    stem = md_path[: -len(".md")] if md_path.endswith(".md") else md_path
+    suffix = f"-{verdict}"
+    if stem.endswith(suffix):
+        stem = stem[: -len(suffix)]
+    return stem + "-dashboard.html"
 
 
 def week_output_path(package: dict[str, Any]) -> str:
@@ -610,8 +622,8 @@ body {
 }
 """
 
-# Week-planner-only styling, appended after PAGE_CSS so single-mode output stays
-# byte-identical. Reuses the palette, chip styles, cards, and dark mode above.
+# Week-planner-only styling, appended after PAGE_CSS. Reuses the palette, chip
+# styles, cards, and dark mode above; adds the ranking rows and per-spot cards.
 WEEK_CSS = """
 .hero-week .overlay { max-width: 640px; }
 .hero-week .overlay .range { margin: 8px 0 2px; font-size: 1.5rem; font-weight: 700; }
@@ -659,6 +671,27 @@ WEEK_CSS = """
 }
 """
 
+# Dashboard-only styling, appended after PAGE_CSS. Adds the sticky tab bar and
+# the show/hide panel rule; reuses the palette, cards, chips, tide/strip styles,
+# and dark mode above. The hero and tide section inside the Today panel render
+# byte-identically to the former single mode.
+DASHBOARD_CSS = """
+.tabbar {
+  position: sticky; top: 0; z-index: 1000; display: flex; gap: 4px;
+  padding: 8px 4%; background: var(--card); border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab {
+  font: inherit; font-weight: 700; font-size: 0.92rem; color: var(--muted);
+  background: transparent; border: none; border-radius: 10px; padding: 9px 16px;
+  cursor: pointer; white-space: nowrap;
+}
+.tab:hover { color: var(--ink); background: var(--page); }
+.tab[aria-selected="true"] { color: #fff; background: var(--accent); }
+.panel[hidden] { display: none; }
+.placeholder { color: var(--muted); }
+"""
+
 # The map init is a few inline lines. Literal {z}/{x}/{y} in the tile template
 # must survive verbatim, so lat/lon are substituted via sentinels (not .format
 # or an f-string, which would choke on the braces).
@@ -672,6 +705,7 @@ MAP_JS = """(function () {
   L.circleMarker([lat, lon], {
     radius: 9, weight: 2, color: '#ffffff', fillColor: '#2b7cd3', fillOpacity: 0.9
   }).addTo(map);
+  window.__surfMap = map;
 })();"""
 
 # Week map: one marker per spot with a name + best-verdict popup, auto-fit to
@@ -699,6 +733,57 @@ WEEK_MAP_JS = """(function () {
 })();"""
 
 
+# Panel toggle: all four panels are in the DOM; clicking a tab (or arriving with
+# a #today/#forecast/#windows/#info fragment) shows one and hides the rest. No
+# data is fetched on click. When the Today panel becomes visible its Leaflet map
+# is re-measured, so a dashboard opened straight onto another tab still draws the
+# map correctly once Today is selected.
+TOGGLE_JS = """(function () {
+  var panels = ['today', 'forecast', 'windows', 'info'];
+  function show(name) {
+    if (panels.indexOf(name) < 0) { name = 'today'; }
+    panels.forEach(function (p) {
+      var panel = document.getElementById('panel-' + p);
+      var tab = document.getElementById('tab-' + p);
+      if (panel) { panel.hidden = (p !== name); }
+      if (tab) { tab.setAttribute('aria-selected', p === name ? 'true' : 'false'); }
+    });
+    if (name === 'today' && window.__surfMap) { window.__surfMap.invalidateSize(); }
+  }
+  function fromHash() {
+    show((window.location.hash || '').replace('#', '') || 'today');
+  }
+  document.querySelectorAll('.tab[data-panel]').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var name = tab.getAttribute('data-panel');
+      window.location.hash = name;
+      show(name);
+    });
+  });
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+})();"""
+
+# The four dashboard tabs, in fixed display order.
+DASHBOARD_TABS = [
+    ("today", "Today"),
+    ("forecast", "Forecast"),
+    ("windows", "Windows"),
+    ("info", "Spot info"),
+]
+
+# Placeholder copy for the three panels this slice does not yet populate; later
+# slices replace each body. Kept in sync with the Markdown twin's placeholders.
+PANEL_PLACEHOLDERS = {
+    "forecast": ("Forecast", "This spot's 7-day forecast lands here in a later update."),
+    "windows": ("Windows", "The ranked session windows for this week land here in a later update."),
+    "info": (
+        "Spot info",
+        "The works-on profile, hazards, webcams, and community notes land here in a later update.",
+    ),
+}
+
+
 def _swell_wind(entry: dict[str, Any]) -> str:
     """The "swell · wind" display join for a day or ranking entry; parts optional."""
     return " · ".join(str(entry[k]) for k in ("swell", "wind") if entry.get(k))
@@ -712,56 +797,25 @@ def _entry_detail(entry: dict[str, Any]) -> str:
     return detail
 
 
-def render(package: dict[str, Any]) -> str:
-    """Render the full self-contained HTML document for a data package.
+def _target_day_view(package: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the shared Today values used by both the HTML and Markdown twins.
 
-    Reads Leaflet's vendored CSS/JS for inlining (raises OSError when missing,
-    which the CLI turns into a soft failure). Every value drawn from the
-    package is HTML-escaped; the only remote reference emitted is the OSM tile
-    URL template inside the inlined map init.
+    Pulls the target day, verdict, spot identity, tide extremes/windows, the
+    daylight row, and the display units out of the package once so the HTML
+    Today panel and the flat Markdown twin never drift. Raises KeyError when
+    `analysis.target_day` is absent so the CLI degrades to the soft-failure JSON.
     """
     conditions = package.get("conditions", {})
     analysis = package.get("analysis", {})
-    spot_data = package.get("spot_data", {})
 
     target = analysis["target_day"]
     verdict = target["verdict"]
     target_date = target.get("date") or conditions.get("report", {}).get("target_date")
 
     spot = conditions.get("spot", {})
-    spot_name = spot.get("name", "This spot")
-    coords = spot.get("coordinates") or [0.0, 0.0]
-    lat, lon = float(coords[0]), float(coords[1])
-
     units = conditions.get("units", {})
-    tide_unit = units.get("tide_height", "m")
-
-    leaflet_css = _read_vendor("leaflet.css")
-    leaflet_js = _read_vendor("leaflet.js")
-
-    esc = html.escape
-
-    def attr(value: str) -> str:
-        return html.escape(str(value), quote=True)
-
-    # --- Map hero -----------------------------------------------------------
-    weekday_upper = _weekday(target_date, WEEKDAY_FULL).upper() if target_date else ""
-    hero_chip = _verdict_chip(verdict, weekday_upper or None)
-    one_liner = target.get("one_liner")
-    sub_html = f'<p class="sub">{esc(str(one_liner))}</p>' if one_liner else ""
-    hero = (
-        '<section class="hero">'
-        '<div id="surf-map"></div>'
-        f'<div class="overlay">{hero_chip}'
-        f'<h1>{esc(str(spot_name))}</h1>{sub_html}</div>'
-        "</section>"
-    )
-
-    # --- Tide curve + session windows --------------------------------------
     tides = conditions.get("tides", {})
     tide_days = tides.get("days")
-    extremes = assemble_extremes(tide_days, target_date) if (tide_days and target_date) else []
-    windows = target.get("windows") or []
 
     daylight_row = None
     for row in conditions.get("daylight", {}).get("days", []):
@@ -769,131 +823,233 @@ def render(package: dict[str, Any]) -> str:
             daylight_row = row
             break
 
-    tide_day_label = _weekday(target_date, WEEKDAY_FULL) if target_date else "Target day"
-    source = tides.get("source")
-    datum = tides.get("datum")
-    # The datum belongs in the title (spec: "Saturday tide & session windows
-    # (chart datum)"); CD gets its human-readable name, other datums keep
-    # their code. Source attribution stays in the sub-paragraph.
-    datum_phrase = ""
-    if datum:
-        datum_phrase = " (chart datum)" if datum == "CD" else f" ({datum})"
-    tide_sub = f'<p class="sub">{esc(str(source))}</p>' if source else ""
-
-    # Hourly strip data for the target day. tide_svg clips it to the plotted
-    # window (dawn..dusk), so pass the full day's hours here.
     target_hours: list[dict[str, Any]] = []
     for md in conditions.get("marine", {}).get("days", []):
         if md.get("date") == target_date:
             target_hours = md.get("hours") or []
             break
-    swell_unit = units.get("wave_height", "m")
-    wind_unit = units.get("wind_speed", "kn")
 
-    if extremes:
+    datum = tides.get("datum")
+    # The datum belongs in the section title (spec: "Saturday tide & session
+    # windows (chart datum)"); CD gets its human-readable name, other datums
+    # keep their code. Source attribution stays in the sub-paragraph.
+    datum_phrase = ""
+    if datum:
+        datum_phrase = " (chart datum)" if datum == "CD" else f" ({datum})"
+
+    coords = spot.get("coordinates") or [0.0, 0.0]
+    return {
+        "target": target,
+        "verdict": verdict,
+        "target_date": target_date,
+        "spot_name": spot.get("name", "This spot"),
+        "lat": float(coords[0]),
+        "lon": float(coords[1]),
+        "one_liner": target.get("one_liner"),
+        "windows": target.get("windows") or [],
+        "tide_events": _target_day_events(tide_days, target_date),
+        "extremes": assemble_extremes(tide_days, target_date) if (tide_days and target_date) else [],
+        "daylight_row": daylight_row,
+        "target_hours": target_hours,
+        "tide_source": tides.get("source"),
+        "tide_note": tides.get("note"),
+        "datum_phrase": datum_phrase,
+        "day_label": _weekday(target_date, WEEKDAY_FULL) if target_date else "Target day",
+        "tide_unit": units.get("tide_height", "m"),
+        "swell_unit": units.get("wave_height", "m"),
+        "wind_unit": units.get("wind_speed", "kn"),
+    }
+
+
+def _target_day_events(tide_days: list[dict[str, Any]] | None, target_date: str | None) -> list[dict[str, Any]]:
+    """The target day's own tide events (for the Markdown twin's tide list)."""
+    for d in tide_days or []:
+        if d.get("date") == target_date:
+            return d.get("events") or []
+    return []
+
+
+def _today_panel_html(view: dict[str, Any]) -> tuple[str, str]:
+    """Build the Today panel body (hero + tide/session card) and its map JS.
+
+    This is the former single-mode content, limited to the target day: the
+    Leaflet map hero with the verdict chip, and the tide curve with the aligned
+    hourly strip clipped to daylight. Returns (panel_html, map_js).
+    """
+    esc = html.escape
+
+    # --- Map hero -----------------------------------------------------------
+    weekday_upper = _weekday(view["target_date"], WEEKDAY_FULL).upper() if view["target_date"] else ""
+    hero_chip = _verdict_chip(view["verdict"], weekday_upper or None)
+    one_liner = view["one_liner"]
+    sub_html = f'<p class="sub">{esc(str(one_liner))}</p>' if one_liner else ""
+    hero = (
+        '<section class="hero">'
+        '<div id="surf-map"></div>'
+        f'<div class="overlay">{hero_chip}'
+        f'<h1>{esc(str(view["spot_name"]))}</h1>{sub_html}</div>'
+        "</section>"
+    )
+
+    # --- Tide curve + session windows --------------------------------------
+    tide_sub = f'<p class="sub">{esc(str(view["tide_source"]))}</p>' if view["tide_source"] else ""
+    if view["extremes"]:
         tide_body = tide_svg(
-            extremes, windows, daylight_row, tide_unit, target_hours, swell_unit, wind_unit
+            view["extremes"], view["windows"], view["daylight_row"], view["tide_unit"],
+            view["target_hours"], view["swell_unit"], view["wind_unit"],
         )
     else:
-        note = tides.get("note") or "No automated tide data for this spot."
+        note = view["tide_note"] or "No automated tide data for this spot."
         items = "".join(
             f'<li>{esc(str(w.get("label", "Session")))}: '
             f'{esc(str(w.get("from", "?")))}–{esc(str(w.get("to", "?")))}</li>'
-            for w in windows
+            for w in view["windows"]
         )
         windows_html = f'<ul class="windows-list">{items}</ul>' if items else ""
         tide_body = f'<p class="tide-note">{esc(str(note))}</p>{windows_html}'
 
     tide_section = (
-        f'<section class="card"><h2>{esc(tide_day_label)} tide &amp; session windows'
-        f"{esc(datum_phrase)}</h2>"
+        f'<section class="card"><h2>{esc(view["day_label"])} tide &amp; session windows'
+        f"{esc(view['datum_phrase'])}</h2>"
         f"{tide_sub}{tide_body}</section>"
     )
 
-    # --- Week at a glance ---------------------------------------------------
-    week = analysis.get("week") or []
-    week_section = ""
-    if week:
-        rows = []
-        for entry in week:
-            d = entry.get("date")
-            day_label = f"{_weekday(d, WEEKDAY_ABBR)} {date.fromisoformat(d).day}" if d else "?"
-            chip = _verdict_chip(entry.get("verdict", "check"), extra_class="week-verdict")
-            detail = _entry_detail(entry)
-            rows.append(
-                f'<div class="week-row"><div class="week-day">{esc(day_label)}</div>'
-                f'<div class="week-chip">{chip}</div>'
-                f'<div class="week-detail">{esc(detail)}</div></div>'
-            )
-        week_section = (
-            '<section class="card"><h2>Week at a glance</h2>' + "".join(rows) + "</section>"
-        )
+    panel = f'{hero}\n<main class="wrap">\n{tide_section}\n</main>'
+    map_js = MAP_JS.replace("__LAT__", json.dumps(view["lat"])).replace("__LON__", json.dumps(view["lon"]))
+    return panel, map_js
 
-    # --- Webcams ------------------------------------------------------------
-    webcams = spot_data.get("webcams") or []
-    webcam_section = ""
-    if webcams:
-        cards = []
-        for cam in webcams:
-            url = cam.get("url", "")
-            tag = "Free" if cam.get("free") else "Paywalled"
-            cards.append(
-                f'<a class="webcam" href="{attr(url)}" target="_blank" rel="noopener noreferrer">'
-                f'<div class="name">{esc(str(cam.get("name", "Webcam")))}</div>'
-                f'<div class="tag">{esc(tag)}</div></a>'
-            )
-        webcam_section = (
-            '<section class="card"><h2>Webcams</h2>'
-            f'<div class="webcams">{"".join(cards)}</div></section>'
-        )
 
-    # --- Hazards (always visible; never silently empty) ---------------------
-    hazards = spot_data.get("hazards") or []
-    if hazards:
-        haz_items = "".join(f"<li>{esc(str(h))}</li>" for h in hazards)
-        haz_body = f'<ul class="hazards-list">{haz_items}</ul>'
-    else:
-        haz_body = (
-            "<p>No hazards documented for this spot. "
-            "Verify from the beach before paddling out.</p>"
-        )
-    hazards_section = f'<section class="card hazards-card"><h2>Hazards</h2>{haz_body}</section>'
+def render_dashboard(package: dict[str, Any]) -> str:
+    """Render the self-contained tabbed Dashboard HTML document for a package.
 
-    # --- Footer -------------------------------------------------------------
-    md_name = ""
-    filenames = conditions.get("report", {}).get("filenames")
-    if isinstance(filenames, dict) and verdict in filenames:
-        md_name = Path(filenames[verdict]).name
-    md_line = f'<p>Full report: {esc(md_name)}</p>' if md_name else ""
-    footer = (
-        '<footer class="footer">'
-        "<p>AI-generated report. Verify conditions on-site; if in doubt, don't paddle out.</p>"
-        f"{md_line}</footer>"
+    One file: a four-button tab bar (Today / Forecast / Windows / Spot info),
+    four panels, and an inline toggle script that shows one panel at a time (the
+    opening tab is chosen by a URL fragment; default Today). Only the Today panel
+    is populated in this slice; the other three are placeholders. Reads Leaflet's
+    vendored CSS/JS for inlining (raises OSError when missing, which the CLI
+    turns into a soft failure). Every value drawn from the package is
+    HTML-escaped; the only remote reference emitted is the OSM tile URL template
+    inside the inlined map init.
+    """
+    view = _target_day_view(package)
+    esc = html.escape
+
+    leaflet_css = _read_vendor("leaflet.css")
+    leaflet_js = _read_vendor("leaflet.js")
+
+    today_body, map_js = _today_panel_html(view)
+
+    # --- Tab bar (fixed order) ---------------------------------------------
+    tab_buttons = "".join(
+        f'<button class="tab" id="tab-{key}" role="tab" data-panel="{key}" '
+        f'aria-controls="panel-{key}" aria-selected="{"true" if key == "today" else "false"}">'
+        f"{esc(label)}</button>"
+        for key, label in DASHBOARD_TABS
     )
+    tabbar = f'<nav class="tabbar" role="tablist" aria-label="Dashboard views">{tab_buttons}</nav>'
 
-    map_js = MAP_JS.replace("__LAT__", json.dumps(lat)).replace("__LON__", json.dumps(lon))
+    # --- Panels (Today populated; the rest placeholders) --------------------
+    panels = [
+        '<section class="panel" id="panel-today" role="tabpanel" '
+        f'aria-labelledby="tab-today">\n{today_body}\n</section>'
+    ]
+    for key, label in DASHBOARD_TABS:
+        if key == "today":
+            continue
+        heading, copy = PANEL_PLACEHOLDERS[key]
+        panels.append(
+            f'<section class="panel" id="panel-{key}" role="tabpanel" '
+            f'aria-labelledby="tab-{key}" hidden>\n'
+            f'<main class="wrap"><section class="card"><h2>{esc(heading)}</h2>'
+            f'<p class="placeholder">{esc(copy)}</p></section></main>\n</section>'
+        )
+    panels_html = "\n".join(panels)
+
+    # --- Footer (shared, below the panels) ---------------------------------
+    # The twin's exact path depends on the CLI's --out override, which the
+    # renderer does not see, so name it by its relationship rather than guessing.
+    footer = (
+        '<main class="wrap"><footer class="footer">'
+        "<p>AI-generated dashboard. Verify conditions on-site; if in doubt, don't paddle out.</p>"
+        "<p>A paired Markdown twin is saved alongside this file (same name, .md).</p>"
+        "</footer></main>"
+    )
 
     return (
         "<!DOCTYPE html>\n"
         '<html lang="en">\n<head>\n'
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>{esc(str(spot_name))} surf report</title>\n"
+        f"<title>{esc(str(view['spot_name']))} surf dashboard</title>\n"
         f"<style>{leaflet_css}</style>\n"
-        f"<style>{PAGE_CSS}</style>\n"
+        f"<style>{PAGE_CSS}{DASHBOARD_CSS}</style>\n"
         "</head>\n<body>\n"
-        f"{hero}\n"
-        '<main class="wrap">\n'
-        f"{tide_section}\n"
-        f"{week_section}\n"
-        f"{webcam_section}\n"
-        f"{hazards_section}\n"
+        f"{tabbar}\n"
+        f"{panels_html}\n"
         f"{footer}\n"
-        "</main>\n"
         f"<script>{leaflet_js}</script>\n"
         f"<script>{map_js}</script>\n"
+        f"<script>{TOGGLE_JS}</script>\n"
         "</body>\n</html>\n"
     )
+
+
+def render_dashboard_markdown(package: dict[str, Any]) -> str:
+    """Render the flat Markdown twin of the Dashboard (no tabs; sections stacked).
+
+    Markdown has no tabs, so the four views stack: Today (populated) then
+    Forecast / Windows / Spot info placeholders. The Today section mirrors the
+    HTML Today panel (verdict, one-liner, tide events, session windows) from the
+    same resolved values, so the twin never drifts from the page. Raises
+    KeyError when `analysis.target_day` is absent (soft-failed by the CLI).
+    """
+    view = _target_day_view(package)
+    emoji, label = VERDICT_DISPLAY.get(view["verdict"], ("", str(view["verdict"]).upper()))
+
+    date_suffix = f" ({view['target_date']})" if view["target_date"] else ""
+    lines = [
+        f"# {view['spot_name']} - Surf Dashboard{date_suffix}",
+        "",
+        "> AI-generated dashboard. Verify conditions on-site; if in doubt, don't paddle out.",
+        "",
+        f"## Today - {view['day_label']}{date_suffix}",
+        "",
+        f"**Verdict:** {emoji} {label}".rstrip(),
+        "",
+    ]
+    if view["one_liner"]:
+        lines += [str(view["one_liner"]), ""]
+
+    lines += [f"### Tide & session windows{view['datum_phrase']}", ""]
+    if view["tide_source"]:
+        lines += [f"Source: {view['tide_source']}.", ""]
+
+    tide_unit = view["tide_unit"]
+    if view["tide_events"]:
+        for e in view["tide_events"]:
+            kind = str(e.get("type", "")).capitalize()
+            time = e.get("time", "?")
+            height = e.get("height")
+            height_str = f" · {_fmt_height(float(height))} {tide_unit}" if height is not None else ""
+            lines.append(f"- {kind} {time}{height_str}")
+        lines.append("")
+    else:
+        lines += [view["tide_note"] or "No automated tide data for this spot.", ""]
+
+    if view["windows"]:
+        lines.append("**Session windows:**")
+        for w in view["windows"]:
+            label_w = w.get("label", "Session")
+            lines.append(f"- {label_w}: {w.get('from', '?')}-{w.get('to', '?')}")
+        lines.append("")
+
+    for key, _ in DASHBOARD_TABS:
+        if key == "today":
+            continue
+        heading, copy = PANEL_PLACEHOLDERS[key]
+        lines += [f"## {heading}", "", f"_{copy}_", ""]
+
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _best_verdict(days: list[dict[str, Any]]) -> str:
@@ -1069,27 +1225,40 @@ def render_week(package: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 SOFT_FAIL_NOTE = (
-    "The Markdown report remains the canonical output and can be opened directly. "
+    "The data package and any Markdown twin remain readable directly. "
     "The HTML view is an optional convenience."
 )
+
+
+def _write_file(path: Path, text: str) -> None:
+    """Write text, creating the parent directory. Raises OSError on failure."""
+    if path.parent and not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 @click.command()
 @click.option("--data", default=None, help="Path to the run's data-package JSON (Phase 5A shape). Required.")
 @click.option(
     "--mode",
-    type=click.Choice(["single", "week"]),
-    default="single",
-    help="single (default) renders one spot's report; week renders a multi-spot week planner.",
+    type=click.Choice(["dashboard", "week"]),
+    default="dashboard",
+    help="dashboard (default) renders one spot's tabbed Dashboard (HTML + a flat Markdown twin); "
+    "week renders a multi-spot week planner.",
 )
 @click.option(
     "--out",
     default=None,
-    help="Override the output HTML path. Defaults to the verdict's Markdown report (single) "
-    "or reports/{week.start}-week.html (week).",
+    help="Override the output HTML path. Defaults to reports/{date}-{slug}-dashboard.html "
+    "(dashboard) or reports/{week.start}-week.html (week). In dashboard mode the Markdown "
+    "twin is written next to it with a .md extension.",
 )
 def cli(data: str | None, mode: str, out: str | None):
-    """Render a self-contained HTML surf report and print {"html_path": ...}."""
+    """Render a self-contained HTML surf dashboard, print {"html_path": ...}.
+
+    In dashboard mode the paired Markdown twin is written next to the HTML and
+    its path echoed as "md_path"; week mode writes and echoes the HTML only.
+    """
     # A missing --data is an invalid argument (exit 1), per the Tool Contract.
     if not data:
         click.echo(json.dumps({"error": "--data is required (path to the data-package JSON)"}))
@@ -1106,23 +1275,27 @@ def cli(data: str | None, mode: str, out: str | None):
         if mode == "week":
             out_path = out or week_output_path(package)
             html_doc = render_week(package)
+            md_doc = None
         else:
-            out_path = out or html_output_path(package)
-            html_doc = render(package)
+            out_path = out or dashboard_output_path(package)
+            html_doc = render_dashboard(package)
+            md_doc = render_dashboard_markdown(package)
     except (KeyError, TypeError, ValueError, OSError) as e:
         click.echo(json.dumps({"error": f"Cannot render report: {e}", "note": SOFT_FAIL_NOTE}))
         sys.exit(0)
 
+    result: dict[str, str] = {"html_path": out_path}
     try:
-        path = Path(out_path)
-        if path.parent and not path.parent.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(html_doc, encoding="utf-8")
+        _write_file(Path(out_path), html_doc)
+        if md_doc is not None:
+            md_path = str(Path(out_path).with_suffix(".md"))
+            _write_file(Path(md_path), md_doc)
+            result["md_path"] = md_path
     except OSError as e:
-        click.echo(json.dumps({"error": f"Cannot write HTML to {out_path}: {e}", "note": SOFT_FAIL_NOTE}))
+        click.echo(json.dumps({"error": f"Cannot write output to {out_path}: {e}", "note": SOFT_FAIL_NOTE}))
         sys.exit(0)
 
-    click.echo(json.dumps({"html_path": out_path}))
+    click.echo(json.dumps(result))
 
 
 if __name__ == "__main__":

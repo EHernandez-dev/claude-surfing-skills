@@ -2,13 +2,18 @@
 
 Unit tests cover the pure seams (tide geometry, path swapping, SVG output);
 renderer/CLI tests cover graceful degradation, escaping, self-containment, and
-the click contract. A golden-file test pins the full rendered document.
+the click contract. Golden-file tests pin the full rendered Dashboard document
+and its flat Markdown twin.
 
-Regenerate the golden file after an INTENTIONAL design change with:
+Regenerate the dashboard golden files after an INTENTIONAL design change with:
     cd skills/spot-researcher/tools && uv run python -c \
       "import json, render_report; \
-       print(render_report.render(json.load(open('testdata/data-package.json'))), end='')" \
-      > testdata/golden-report.html
+       print(render_report.render_dashboard(json.load(open('testdata/data-package.json'))), end='')" \
+      > testdata/golden-dashboard-report.html
+    cd skills/spot-researcher/tools && uv run python -c \
+      "import json, render_report; \
+       print(render_report.render_dashboard_markdown(json.load(open('testdata/data-package.json'))), end='')" \
+      > testdata/golden-dashboard-report.md
 
 Regenerate the week-planner golden file after an INTENTIONAL design change with:
     cd skills/spot-researcher/tools && uv run python -c \
@@ -18,7 +23,6 @@ Regenerate the week-planner golden file after an INTENTIONAL design change with:
 """
 
 import json
-import math
 import subprocess
 import sys
 from pathlib import Path
@@ -30,9 +34,10 @@ import render_report
 from render_report import (
     assemble_extremes,
     cli,
-    html_output_path,
+    dashboard_output_path,
     parse_hhmm,
-    render,
+    render_dashboard,
+    render_dashboard_markdown,
     render_week,
     tide_height_at,
     tide_svg,
@@ -42,7 +47,8 @@ from render_report import (
 TOOLS_DIR = Path(__file__).resolve().parent
 TESTDATA = TOOLS_DIR / "testdata"
 PACKAGE_PATH = TESTDATA / "data-package.json"
-GOLDEN_PATH = TESTDATA / "golden-report.html"
+GOLDEN_PATH = TESTDATA / "golden-dashboard-report.html"
+GOLDEN_MD_PATH = TESTDATA / "golden-dashboard-report.md"
 WEEK_PACKAGE_PATH = TESTDATA / "week-data-package.json"
 WEEK_GOLDEN_PATH = TESTDATA / "golden-week-report.html"
 
@@ -161,7 +167,7 @@ class TestAssembleExtremes:
         assert assemble_extremes(None, "2026-07-11") == []
 
 
-class TestHtmlOutputPath:
+class TestDashboardOutputPath:
     def _package(self, verdict):
         return {
             "analysis": {"target_day": {"verdict": verdict}},
@@ -172,18 +178,19 @@ class TestHtmlOutputPath:
             }}},
         }
 
-    def test_go_check_skip_variants(self):
-        assert html_output_path(self._package("go")) == "reports/2026-07-11-mundaka-go.html"
-        assert html_output_path(self._package("check")) == "reports/2026-07-11-mundaka-check.html"
-        assert html_output_path(self._package("skip")) == "reports/2026-07-11-mundaka-skip.html"
+    def test_no_verdict_slug_in_stable_name(self):
+        # Any verdict yields the same stable dashboard name (no -go/-check/-skip).
+        for verdict in ("go", "check", "skip"):
+            assert dashboard_output_path(self._package(verdict)) == \
+                "reports/2026-07-11-mundaka-dashboard.html"
 
     def test_missing_verdict_raises(self):
         with pytest.raises((KeyError, TypeError)):
-            html_output_path({"analysis": {"target_day": {}}, "conditions": {"report": {"filenames": {}}}})
+            dashboard_output_path({"analysis": {"target_day": {}}, "conditions": {"report": {"filenames": {}}}})
 
     def test_missing_filenames_raises(self):
         with pytest.raises((KeyError, TypeError)):
-            html_output_path({"analysis": {"target_day": {"verdict": "go"}}, "conditions": {"report": {}}})
+            dashboard_output_path({"analysis": {"target_day": {"verdict": "go"}}, "conditions": {"report": {}}})
 
 
 class TestTideSvg:
@@ -299,18 +306,83 @@ class TestTideSvg:
         assert f'rotate(270.00 {cx:.2f} ' in svg
 
 
-class TestHourlyStripInRender:
+class TestHourlyStripInDashboard:
     def test_clips_to_daylight_hours(self):
         # Fixture marine day carries 24 hours; the chart spans dawn..dusk
         # (06:12-22:23), so only hours 07..22 fall inside it: 16 bars.
-        html = render(load_package())
+        html = render_dashboard(load_package())
         assert html.count('class="strip-bar') == 16
 
     def test_strip_absent_without_marine_hours(self):
         pkg = load_package()
         pkg["conditions"]["marine"] = {"days": []}
         # No SVG bars emitted (the CSS class definitions always exist).
-        assert 'class="strip-bar' not in render(pkg)
+        assert 'class="strip-bar' not in render_dashboard(pkg)
+
+
+# ---------------------------------------------------------------------------
+# Dashboard shell: tab bar, panels, toggle script
+# ---------------------------------------------------------------------------
+
+
+class TestRenderDashboard:
+    def test_four_tab_buttons_in_order(self):
+        out = render_dashboard(load_package())
+        positions = [out.index(f'id="tab-{k}"') for k in ("today", "forecast", "windows", "info")]
+        assert positions == sorted(positions)
+        assert out.count('class="tab"') == 4
+        # human-readable labels, in order
+        for label in ("Today", "Forecast", "Windows", "Spot info"):
+            assert f">{label}</button>" in out
+
+    def test_four_panels_in_order(self):
+        out = render_dashboard(load_package())
+        positions = [out.index(f'id="panel-{k}"') for k in ("today", "forecast", "windows", "info")]
+        assert positions == sorted(positions)
+        assert out.count('class="panel"') == 4
+
+    def test_toggle_script_present(self):
+        out = render_dashboard(load_package())
+        # the show/hide behaviour and hash-based initial tab
+        assert "addEventListener('click'" in out
+        assert "hashchange" in out
+        assert ".hidden" in out
+
+    def test_today_panel_carries_verdict_tide_and_strip(self):
+        out = render_dashboard(load_package())
+        today = out[out.index('id="panel-today"'):out.index('id="panel-forecast"')]
+        assert "chip-go" in today  # target-day verdict chip
+        assert 'class="tide-chart"' in today  # tide curve
+        assert 'class="strip-bar' in today  # aligned hourly strip
+        assert "tide &amp; session windows" in today
+
+    def test_other_panels_are_placeholders(self):
+        out = render_dashboard(load_package())
+        rest = out[out.index('id="panel-forecast"'):]
+        assert rest.count('class="placeholder"') == 3
+        assert "later update" in rest
+        # the populated Today content does not leak into the placeholder panels
+        assert 'class="tide-chart"' not in rest
+
+    def test_map_hero_and_invalidate_on_today(self):
+        out = render_dashboard(load_package())
+        assert 'id="surf-map"' in out
+        assert "window.__surfMap" in out  # exposed for invalidateSize on tab show
+        assert "invalidateSize" in out
+
+    def test_missing_target_day_raises(self):
+        pkg = load_package()
+        del pkg["analysis"]["target_day"]
+        with pytest.raises((KeyError, TypeError)):
+            render_dashboard(pkg)
+
+    def test_footer_names_twin_by_relationship_not_a_guessed_filename(self):
+        # The twin's real path depends on the CLI --out override the renderer
+        # never sees, so the footer must not print a specific (possibly wrong)
+        # filename; it names the twin by its relationship instead.
+        out = render_dashboard(load_package())
+        assert "paired Markdown twin is saved alongside" in out
+        assert "-dashboard.md" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -319,53 +391,24 @@ class TestHourlyStripInRender:
 
 
 class TestRenderDegradation:
-    def test_full_package_has_all_sections_in_order(self):
-        out = render(load_package())
-        i_hero = out.index('class="hero"')
-        i_tide = out.index("tide &amp; session windows")
-        i_week = out.index("Week at a glance")
-        i_cam = out.index(">Webcams<")
-        i_haz = out.index(">Hazards<")
-        i_foot = out.index('class="footer"')
-        assert i_hero < i_tide < i_week < i_cam < i_haz < i_foot
-
     def test_no_tides_renders_note_and_windows(self):
         pkg = load_package()
         pkg["conditions"]["tides"] = {"error": "no station", "note": "Check tide-forecast.com manually."}
-        out = render(pkg)
+        out = render_dashboard(pkg)
         assert "tide-forecast.com" in out
         assert "Dawn patrol" in out  # session windows still listed
         assert '<svg class="tide-chart"' not in out  # no SVG curve drawn
 
-    def test_no_webcams_omits_section(self):
-        pkg = load_package()
-        pkg["spot_data"]["webcams"] = []
-        out = render(pkg)
-        assert ">Webcams<" not in out
-
-    def test_empty_hazards_keeps_explicit_safety_line(self):
-        pkg = load_package()
-        pkg["spot_data"]["hazards"] = []
-        out = render(pkg)
-        assert ">Hazards<" in out
-        assert "No hazards documented for this spot" in out
-
-    def test_no_week_omits_section(self):
-        pkg = load_package()
-        pkg["analysis"]["week"] = []
-        out = render(pkg)
-        assert "Week at a glance" not in out
-
     def test_missing_one_liner_omits_sub(self):
         pkg = load_package()
         pkg["analysis"]["target_day"].pop("one_liner")
-        out = render(pkg)
+        out = render_dashboard(pkg)
         assert 'class="overlay"' in out
 
     def test_missing_windows_still_renders_curve(self):
         pkg = load_package()
         pkg["analysis"]["target_day"].pop("windows")
-        out = render(pkg)
+        out = render_dashboard(pkg)
         assert "tide-curve" in out
 
 
@@ -373,32 +416,21 @@ class TestRenderEscaping:
     def test_hostile_spot_name_escaped(self):
         pkg = load_package()
         pkg["conditions"]["spot"]["name"] = "<script>alert(1)</script>"
-        out = render(pkg)
+        out = render_dashboard(pkg)
         assert "<script>alert(1)</script>" not in out
         assert "&lt;script&gt;alert(1)&lt;/script&gt;" in out
 
-    def test_hostile_hazard_escaped(self):
+    def test_hostile_one_liner_escaped(self):
         pkg = load_package()
-        pkg["spot_data"]["hazards"] = ["<img src=x onerror=alert(1)>"]
-        out = render(pkg)
+        pkg["analysis"]["target_day"]["one_liner"] = "<img src=x onerror=alert(1)>"
+        out = render_dashboard(pkg)
         assert "<img src=x onerror=alert(1)>" not in out
         assert "&lt;img" in out
 
-    def test_hostile_webcam_url_attribute_escaped(self):
-        pkg = load_package()
-        pkg["spot_data"]["webcams"] = [{"name": "cam", "url": '"><script>x</script>', "free": True}]
-        out = render(pkg)
-        assert '"><script>x</script>' not in out
-
 
 class TestSelfContainment:
-    def _webcamless(self):
-        pkg = load_package()
-        pkg["spot_data"]["webcams"] = []
-        return render(pkg)
-
     def test_no_external_script_or_link_tags(self):
-        out = self._webcamless()
+        out = render_dashboard(load_package())
         assert "<script src=" not in out
         assert "<link " not in out
         assert "unpkg" not in out
@@ -408,30 +440,65 @@ class TestSelfContainment:
         # http strings (the SVG namespace, its banner, CSS bug-tracker
         # comments) that are not resource loads. What matters is that OUR
         # emitted markup adds no remote reference except the OSM tile template.
-        out = self._webcamless()
+        out = render_dashboard(load_package())
         ours = out.replace(render_report._read_vendor("leaflet.css"), "")
         ours = ours.replace(render_report._read_vendor("leaflet.js"), "")
         assert ours.count("http") == 1
         assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" in ours
 
     def test_leaflet_inlined(self):
-        out = self._webcamless()
+        out = render_dashboard(load_package())
         assert "Leaflet 1.9.4" in out  # from the vendored leaflet.js banner
 
 
 class TestRenderDeterminism:
     def test_render_is_stable_across_calls(self):
         pkg = load_package()
-        assert render(pkg) == render(pkg)
+        assert render_dashboard(pkg) == render_dashboard(pkg)
 
     def test_both_color_schemes_present(self):
         # Light base palette plus the prefers-color-scheme dark block; the page
         # never sets a data-theme attribute, so no such selectors belong here.
-        out = render(load_package())
+        out = render_dashboard(load_package())
         assert "--page: #eef1f4" in out  # light base
         assert "prefers-color-scheme: dark" in out
         assert "--page: #0d1520" in out  # dark palette inside the media query
         assert "data-theme" not in out
+
+
+# ---------------------------------------------------------------------------
+# Flat Markdown twin
+# ---------------------------------------------------------------------------
+
+
+class TestDashboardMarkdown:
+    def test_stacks_four_sections_in_order(self):
+        md = render_dashboard_markdown(load_package())
+        positions = [md.index(h) for h in ("## Today", "## Forecast", "## Windows", "## Spot info")]
+        assert positions == sorted(positions)
+
+    def test_today_section_carries_verdict_and_conditions(self):
+        md = render_dashboard_markdown(load_package())
+        today = md[md.index("## Today"):md.index("## Forecast")]
+        assert "**Verdict:**" in today and "GO" in today
+        assert "Clean 1.2 m NW groundswell" in today  # the one-liner
+        # target-day tide events and session windows
+        assert "High 14:21 · 4.3 m" in today
+        assert "Dawn patrol: 07:00-10:30" in today
+
+    def test_other_sections_are_placeholders(self):
+        md = render_dashboard_markdown(load_package())
+        assert md.count("later update") == 3
+
+    def test_no_tides_falls_back_to_note(self):
+        pkg = load_package()
+        pkg["conditions"]["tides"] = {"error": "no station", "note": "Check tide-forecast.com manually."}
+        md = render_dashboard_markdown(pkg)
+        assert "tide-forecast.com" in md
+
+    def test_deterministic_across_calls(self):
+        pkg = load_package()
+        assert render_dashboard_markdown(pkg) == render_dashboard_markdown(pkg)
 
 
 # ---------------------------------------------------------------------------
@@ -440,19 +507,22 @@ class TestRenderDeterminism:
 
 
 class TestCli:
-    def test_writes_default_path_and_prints_json(self, tmp_path):
+    def test_writes_default_paths_and_prints_json(self, tmp_path):
         result = subprocess.run(
             [sys.executable, str(TOOLS_DIR / "render_report.py"), "--data", str(PACKAGE_PATH)],
             cwd=tmp_path, capture_output=True, text=True,
         )
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
-        assert payload["html_path"] == "reports/2026-07-11-mundaka-go.html"
-        written = tmp_path / "reports" / "2026-07-11-mundaka-go.html"
-        assert written.is_file()
-        assert "<!DOCTYPE html>" in written.read_text(encoding="utf-8")
+        assert payload["html_path"] == "reports/2026-07-11-mundaka-dashboard.html"
+        assert payload["md_path"] == "reports/2026-07-11-mundaka-dashboard.md"
+        html = tmp_path / "reports" / "2026-07-11-mundaka-dashboard.html"
+        md = tmp_path / "reports" / "2026-07-11-mundaka-dashboard.md"
+        assert html.is_file() and md.is_file()
+        assert "<!DOCTYPE html>" in html.read_text(encoding="utf-8")
+        assert "## Today" in md.read_text(encoding="utf-8")
 
-    def test_out_override(self, tmp_path):
+    def test_out_override_writes_md_twin_alongside(self, tmp_path):
         out = tmp_path / "custom" / "report.html"
         result = subprocess.run(
             [sys.executable, str(TOOLS_DIR / "render_report.py"),
@@ -460,8 +530,10 @@ class TestCli:
             cwd=tmp_path, capture_output=True, text=True,
         )
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["html_path"] == str(out)
+        payload = json.loads(result.stdout)
+        assert payload["html_path"] == str(out)
         assert out.is_file()
+        assert out.with_suffix(".md").is_file()
 
     def test_broken_package_soft_fails_exit_0(self, tmp_path):
         bad = tmp_path / "bad.json"
@@ -633,6 +705,7 @@ class TestWeekCli:
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert payload["html_path"] == "reports/2026-07-12-week.html"
+        assert "md_path" not in payload  # week mode writes HTML only
         written = tmp_path / "reports" / "2026-07-12-week.html"
         assert written.is_file()
         assert "<!DOCTYPE html>" in written.read_text(encoding="utf-8")
@@ -648,15 +721,14 @@ class TestWeekCli:
         assert json.loads(result.stdout)["html_path"] == str(out)
         assert out.is_file()
 
-    def test_single_mode_default_unchanged(self, tmp_path):
-        # --mode single (the default) must still write the single-report path.
+    def test_dashboard_mode_is_default(self, tmp_path):
+        # No --mode flag must write the dashboard, not the week planner.
         result = subprocess.run(
-            [sys.executable, str(TOOLS_DIR / "render_report.py"),
-             "--mode", "single", "--data", str(PACKAGE_PATH)],
+            [sys.executable, str(TOOLS_DIR / "render_report.py"), "--data", str(PACKAGE_PATH)],
             cwd=tmp_path, capture_output=True, text=True,
         )
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["html_path"] == "reports/2026-07-11-mundaka-go.html"
+        assert json.loads(result.stdout)["html_path"] == "reports/2026-07-11-mundaka-dashboard.html"
 
     def test_week_package_missing_fields_soft_fails_exit_0(self, tmp_path):
         pkg = load_week_package()
@@ -672,10 +744,11 @@ class TestWeekCli:
         payload = json.loads(result.stdout)
         assert "error" in payload and "note" in payload
 
-    def test_single_mode_on_week_package_soft_fails_exit_0(self, tmp_path):
+    def test_dashboard_mode_on_week_package_soft_fails_exit_0(self, tmp_path):
+        # A week package has no analysis.target_day, so dashboard mode soft-fails.
         result = subprocess.run(
             [sys.executable, str(TOOLS_DIR / "render_report.py"),
-             "--mode", "single", "--data", str(WEEK_PACKAGE_PATH)],
+             "--mode", "dashboard", "--data", str(WEEK_PACKAGE_PATH)],
             cwd=tmp_path, capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -691,13 +764,16 @@ class TestWeekCli:
 
 
 # ---------------------------------------------------------------------------
-# Golden file
+# Golden files
 # ---------------------------------------------------------------------------
 
 
 class TestGolden:
-    def test_matches_golden(self):
-        assert render(load_package()) == GOLDEN_PATH.read_text(encoding="utf-8")
+    def test_matches_golden_html(self):
+        assert render_dashboard(load_package()) == GOLDEN_PATH.read_text(encoding="utf-8")
+
+    def test_matches_golden_markdown(self):
+        assert render_dashboard_markdown(load_package()) == GOLDEN_MD_PATH.read_text(encoding="utf-8")
 
     def test_week_matches_golden(self):
         assert render_week(load_week_package()) == WEEK_GOLDEN_PATH.read_text(encoding="utf-8")
