@@ -47,3 +47,19 @@ _Avoid_: forecast history, archive (alone)
 **Target day**:
 The specific day the surfer intends to surf. Reports, verdicts, and report filenames key to it; when none is given, the forecast window's first day stands in.
 _Avoid_: session day, run date (that is when the research executed)
+
+**Dashboard**:
+The single self-contained HTML surface for one spot, with in-page tabs (Today, Forecast, Windows, Spot info). It is where a spot's forecast is read, so the terminal stays quiet. Built by `/surfing:dashboard`, and opened on the relevant tab by `/surfing:conditions`, `/surfing:windows`, and `/surfing:research`. One per spot per day (`reports/<date>-<slug>-dashboard.html`); it supersedes the old standalone single-spot report.
+_Avoid_: report, single report, spot page
+
+**Forecast** (Dashboard tab):
+One spot's next 7 days, interactive. A **Week at a glance** overview (a horizontally-compressed 7-day tide chart, each day clipped to daylight, first light to last light) sits above a **By day** list of day rows (weekday, verdict, swell, one-line description); picking a row swaps in that day's full tide chart with its hourly strip. About one spot over the week, as opposed to the week planner's ranking across many spots.
+_Avoid_: outlook, week (for a single spot)
+
+**Mid-tide split** (tide-chart fill):
+The two-tone fill on a tide chart: the band between the curve and a mid-tide reference line is coloured one way above the line (high water) and another below (low water). Shared by the Forecast overview and every per-day/Today chart.
+_Avoid_: gradient, tide shading
+
+**Week planner**:
+The cross-spot view (`/surfing:week`) that ranks the best session windows across all home spots for the coming week, best first. About which spot to surf, as opposed to the Forecast tab's single-spot week.
+_Avoid_: weekly report, week view
