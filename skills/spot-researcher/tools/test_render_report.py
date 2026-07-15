@@ -23,6 +23,7 @@ Regenerate the week-planner golden file after an INTENTIONAL design change with:
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -400,12 +401,13 @@ class TestRenderDashboard:
         assert 'class="strip-bar' in today  # aligned hourly strip
         assert "tide &amp; session windows" in today
 
-    def test_info_panel_is_placeholder(self):
+    def test_info_panel_is_populated(self):
         out = render_dashboard(load_package())
         rest = out[out.index('id="panel-info"'):]
-        assert rest.count('class="placeholder"') == 1  # info only
-        assert "later update" in rest
-        # the populated Today/Forecast tide charts do not leak into the placeholder
+        # the standing-context panel is filled, not a placeholder
+        assert "later update" not in rest
+        assert "Works-on profile" in rest
+        # the populated Today/Forecast/Windows tide charts do not leak into it
         assert 'class="tide-chart"' not in rest
 
     def test_map_hero_and_invalidate_on_today(self):
@@ -577,6 +579,118 @@ class TestWindowsPanel:
         assert "No standout session windows" in win
 
 
+class TestSpotInfoPanel:
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_works_on_profile_rendered(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Works-on profile" in info
+        # the merged works-on fields land in the definition grid
+        assert "Break type" in info and "Rivermouth sandbar left" in info
+        assert "Ideal swell direction" in info and "Ideal tide" in info
+        assert "Mid tide, incoming" in info
+        # the description sits above the grid
+        assert "world-class rivermouth left" in info
+
+    def test_profile_age_and_no_reresearch_when_fresh(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Profile is 4 days old (researched 2026-07-07)." in info
+        # a 4-day-old profile is fresh, so no re-research prompt appears
+        assert "Consider re-researching" not in info
+
+    def test_reresearch_prompt_when_stale(self):
+        pkg = load_package()
+        pkg["conditions"]["spot"]["profile"]["reresearch_suggested"] = True
+        pkg["conditions"]["spot"]["profile"]["age_days"] = 210
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Profile is 210 days old" in info
+        assert "Consider re-researching" in info
+
+    def test_reresearch_prompt_when_age_unknown(self):
+        # A hand-created profile with no research date: age unknown, still prompt.
+        pkg = load_package()
+        pkg["conditions"]["spot"]["profile"]["age_days"] = None
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Profile age is unknown" in info
+        assert "Consider re-researching" in info
+
+    def test_model_bias_surfaced_when_applied(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Model bias applied:" in info
+        assert "corrected from 6 logged sessions" in info
+        assert "6 sessions" in info and "last verified 2026-07-05" in info
+
+    def test_no_bias_note_when_not_applied(self):
+        pkg = load_package()
+        pkg["conditions"].pop("bias", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Model bias applied" not in info
+
+    def test_assigned_buoy_and_water_temperature(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Assigned buoy:" in info
+        assert "Bilbao-Vizcaya (1026)" in info  # station name + id (documented keys)
+        assert "18.4 km away" in info
+        assert 'href="https://portus.puertos.es/"' in info
+        assert "Water temperature:" in info and "21°C" in info
+        assert "buoy observation" in info
+        assert "Wetsuit:" in info
+
+    def test_hazards_and_webcams_rendered(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Hazards" in info and "hazards-list" in info
+        assert "Rivermouth current sweeps hard" in info
+        assert "Webcams" in info and 'class="webcams"' in info
+        assert "Bermeo harbour live view" in info
+        assert "Free" in info and "Paywalled" in info
+
+    def test_community_notes_rendered(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Community notes" in info
+        assert 'class="cn-list"' in info
+        assert "Chest-high and clean on the dawn push" in info
+        assert 'href="https://www.reddit.com/r/surfing/comments/mundaka1"' in info
+        # conditions / crowd / hazards ride along as the note's meta line
+        assert "1.5 m NW @ 13 s, light SE" in info
+        assert "Strong outgoing current near the rivermouth" in info
+
+    def test_community_notes_empty_state(self):
+        pkg = load_package()
+        pkg["spot_data"]["community_notes"] = []
+        info = self._info_slice(render_dashboard(pkg))
+        assert "No recent first-hand reports found" in info
+        assert 'class="cn-list"' not in info  # no list, just the checked-and-absent note
+
+    def test_community_notes_absent_key_treated_as_empty(self):
+        pkg = load_package()
+        pkg["spot_data"].pop("community_notes", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "No recent first-hand reports found" in info
+
+    def test_unprofiled_spot_degrades_without_crashing(self):
+        # No researched profile, buoy, water, or bias (an unprofiled run). The
+        # panel still renders: a "no profile yet" note and the notes empty state.
+        # (The full unprofiled banner + stub is a separate slice.)
+        pkg = load_package()
+        del pkg["spot_data"]["profile"]
+        del pkg["conditions"]["spot"]["profile"]
+        for k in ("buoy", "sea_temperature", "bias"):
+            pkg["conditions"].pop(k, None)
+        pkg["spot_data"]["community_notes"] = []
+        info = self._info_slice(render_dashboard(pkg))
+        assert "No researched works-on profile yet" in info
+        assert "Buoy &amp; water" not in info  # buoy card omitted when absent
+        assert "No recent first-hand reports found" in info
+
+    def test_hostile_community_note_escaped(self):
+        pkg = load_package()
+        pkg["spot_data"]["community_notes"][0]["summary"] = "<script>alert(1)</script>"
+        out = render_dashboard(pkg)
+        assert "<script>alert(1)</script>" not in out
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in out
+
+
 class TestWeekTideSvg:
     """Focused 7-day tide-geometry tests (like the single-day _x_at tests)."""
 
@@ -726,12 +840,18 @@ class TestSelfContainment:
         # Strip the inlined vendor blocks first: Leaflet's own source carries
         # http strings (the SVG namespace, its banner, CSS bug-tracker
         # comments) that are not resource loads. What matters is that OUR
-        # emitted markup adds no remote reference except the OSM tile template.
+        # emitted markup loads no remote resource except the OSM tile template.
+        # The Spot info panel's external <a href> links (webcams, buoy,
+        # community sources) are navigations, not loads, so they are allowed;
+        # strip them before counting so only true resource references remain.
         out = render_dashboard(load_package())
         ours = out.replace(render_report._read_vendor("leaflet.css"), "")
         ours = ours.replace(render_report._read_vendor("leaflet.js"), "")
-        assert ours.count("http") == 1
         assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" in ours
+        assert 'src="http' not in ours  # no remote scripts/images
+        assert "url(http" not in ours  # no remote CSS resources
+        non_anchor = re.sub(r'href="[^"]*"', "", ours)
+        assert non_anchor.count("http") == 1  # only the OSM tile template
 
     def test_leaflet_inlined(self):
         out = render_dashboard(load_package())
@@ -824,9 +944,18 @@ class TestDashboardMarkdown:
         assert "1.2 m NW @ 13 s" in windows  # swell detail
         assert "works-on window" in windows  # reasoning shown
 
-    def test_info_section_is_placeholder(self):
+    def test_info_section_is_populated(self):
         md = render_dashboard_markdown(load_package())
-        assert md.count("later update") == 1  # info only
+        info = md[md.index("## Spot info"):]
+        assert "later update" not in md
+        assert "### Works-on profile" in info
+        assert "**Break type:** Rivermouth sandbar left" in info
+        assert "Profile is 4 days old (researched 2026-07-07)." in info
+        assert "**Model bias applied:**" in info
+        assert "### Buoy & water" in info
+        assert "[Bilbao-Vizcaya (1026)](https://portus.puertos.es/)" in info
+        assert "### Community notes" in info
+        assert "[2026-06-28](https://www.reddit.com/r/surfing/comments/mundaka1)" in info
 
     def test_empty_windows_section_reads_as_checked_and_absent(self):
         pkg = load_package()

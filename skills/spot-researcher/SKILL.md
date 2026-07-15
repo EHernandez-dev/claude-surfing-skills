@@ -660,7 +660,7 @@ mode; it supersedes the retired `single` mode.
 3. The script prints JSON on exit 0 either way:
    - Success: `{"html_path": "reports/{target-date}-{spot-slug}-dashboard.html", "md_path": "reports/{target-date}-{spot-slug}-dashboard.md"}`.
      It writes the self-contained HTML Dashboard plus a paired flat Markdown twin (the four views
-     stacked; the Today, Forecast and Windows sections are populated). The Forecast panel is
+     stacked; all four sections are populated). The Forecast panel is
      interactive: a **Week at a glance** overview (a compressed 7-day tide chart, each day clipped to
      its own first-light-to-last-light window with the mid-tide two-tone split) above a **By day**
      list of day-selector rows (weekday, works-on-corrected GO / CHECK / SKIP verdict from
@@ -671,9 +671,17 @@ mode; it supersedes the retired `single` mode.
      in date order, each day expandable to its own tide chart with the recommended session shaded
      (rows toggle independently, so several charts can be open at once; the earliest day is open by
      default). The stored `analysis.windows` order stays best-first (the contract); the panel sorts
-     by date for display. The Markdown twin has no interaction: it lists the seven days and the
-     windows (in the same date order, no charts). The dashboard name is stable (no verdict slug), so
-     a re-run the same day overwrites both files.
+     by date for display. The Spot info panel carries the spot's standing, non-time-sensitive
+     context: the works-on profile (`spot_data.profile`) with the profile-freshness note and a
+     re-research suggestion when stale or undated (from `conditions.spot.profile`) plus any applied
+     model bias (`conditions.bias`), the assigned buoy and water temperature (`conditions.buoy`,
+     `conditions.sea_temperature`), the hazards (`spot_data.hazards`), the webcams
+     (`spot_data.webcams`), and the community notes (`spot_data.community_notes`, which fall back to
+     an explicit "no recent first-hand reports found" state so an empty section reads as
+     checked-and-absent, never broken). It reads only existing payload; no `fetch_conditions.py`
+     change is required. The Markdown twin has no interaction: it lists the seven days and the
+     windows (in the same date order, no charts) and stacks the same Spot info section. The
+     dashboard name is stable (no verdict slug), so a re-run the same day overwrites both files.
    - Soft failure: `{"error": ..., "note": ...}`. The markdown report/twin remain readable; note the
      failure to the user and continue, do not block on it.
 4. Open the HTML for the user on the Today tab (Today is the default, no fragment needed):

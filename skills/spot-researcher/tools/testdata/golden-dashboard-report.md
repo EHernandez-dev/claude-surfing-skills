@@ -44,4 +44,47 @@ Source: WorldTides.
 
 ## Spot info
 
-_The works-on profile, hazards, webcams, and community notes land here in a later update._
+### Works-on profile
+
+Profile is 4 days old (researched 2026-07-07).
+
+A world-class rivermouth left that peels fast and hollow over a shifting sandbar.
+
+- **Break type:** Rivermouth sandbar left
+- **Bottom:** Sand over cobblestone
+- **Wave direction:** left
+- **Ideal swell direction:** NW
+- **Ideal swell size:** 1.0-3.0 m
+- **Ideal period:** 12s+
+- **Ideal wind:** S/SE offshore
+- **Ideal tide:** Mid tide, incoming
+- **Best season:** Autumn (Sep-Nov)
+- **Ability level:** Advanced
+- **Crowd:** Heavy on a swell; strict pecking order
+- **Consistency:** Fickle; needs the sandbar and the right swell
+
+**Model bias applied:** Model runs about 0.2 m high and 0.5 s short here; corrected from 6 logged sessions. (6 sessions, last verified 2026-07-05)
+
+### Buoy & water
+
+- **Assigned buoy:** [Bilbao-Vizcaya (1026)](https://portus.puertos.es/) - 18.4 km away
+- **Water temperature:** 21°C (buoy observation)
+- **Wetsuit:** 3/2 mm full suit or a spring suit; boots optional.
+
+### Hazards
+
+- Powerful, fast left-hander that closes out on bigger swells; strong barrel hold-downs.
+- Rivermouth current sweeps hard on the outgoing tide; easy to be pulled off the peak.
+- Shallow sandbar over cobblestones at low tide; heavy wipeouts near the takeoff.
+- Localism and a strict lineup pecking order; respect the priority or stay on the shoulder.
+
+### Webcams
+
+- [Mundaka rivermouth cam](https://www.surfline.com/surf-report/mundaka) - Paywalled
+- [Bermeo harbour live view](https://www.windy.com/webcams/bermeo) - Free
+- [Euskadi coastal cam network](https://www.euskadi.eus/webcams/mundaka) - Free
+
+### Community notes
+
+- **[2026-06-28](https://www.reddit.com/r/surfing/comments/mundaka1)**: Chest-high and clean on the dawn push; barrels on the inside. (1.5 m NW @ 13 s, light SE · Busy, about 30 out · Strong outgoing current near the rivermouth)
+- **[2026-05-15](https://www.surfforum.example/mundaka-may)**: Sandbar still reforming after winter; short rides only. (1.0 m WNW @ 10 s · Light · Cobblestones exposed at low tide)

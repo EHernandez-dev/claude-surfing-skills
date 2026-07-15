@@ -8,7 +8,13 @@
       ],
       "facing_deg": 350,
       "facing_compass": "N",
-      "timezone": "Europe/Madrid"
+      "timezone": "Europe/Madrid",
+      "profile": {
+        "path": "spots/mundaka.yaml",
+        "last_researched": "2026-07-07",
+        "age_days": 4,
+        "reresearch_suggested": false
+      }
     },
     "units": {
       "system": "metric",
@@ -26,6 +32,37 @@
         "check": "reports/2026-07-11-mundaka-check.md",
         "skip": "reports/2026-07-11-mundaka-skip.md"
       }
+    },
+    "buoy": {
+      "station": {
+        "id": "1026",
+        "name": "Bilbao-Vizcaya",
+        "distance_km": 18.4,
+        "url": "https://portus.puertos.es/"
+      },
+      "observed_at": "2026-07-11T04:00:00Z",
+      "wave_height": 1.4,
+      "dominant_period_s": 12.0,
+      "mean_wave_direction": "NW",
+      "wind_speed": 9,
+      "wind_direction": "E",
+      "water_temp": 21.0
+    },
+    "sea_temperature": {
+      "current": 21.0,
+      "source": "buoy observation",
+      "model": 20.5,
+      "buoy": 21.0,
+      "wetsuit": "3/2 mm full suit or a spring suit; boots optional."
+    },
+    "bias": {
+      "applied": true,
+      "swell_height": -0.2,
+      "swell_period_s": 0.5,
+      "samples": 6,
+      "last_verified": "2026-07-05",
+      "note": "Model runs about 0.2 m high and 0.5 s short here; corrected from 6 logged sessions.",
+      "source": "/surfing:verify"
     },
     "tides": {
       "source": "WorldTides",
@@ -2886,6 +2923,39 @@
     }
   },
   "spot_data": {
+    "profile": {
+      "break_type": "Rivermouth sandbar left",
+      "bottom": "Sand over cobblestone",
+      "wave_direction": "left",
+      "ideal_swell_direction": "NW",
+      "ideal_swell_size": "1.0-3.0 m",
+      "ideal_period_s": "12s+",
+      "ideal_wind": "S/SE offshore",
+      "ideal_tide": "Mid tide, incoming",
+      "best_season": "Autumn (Sep-Nov)",
+      "ability_level": "Advanced",
+      "crowd": "Heavy on a swell; strict pecking order",
+      "consistency": "Fickle; needs the sandbar and the right swell",
+      "description": "A world-class rivermouth left that peels fast and hollow over a shifting sandbar."
+    },
+    "community_notes": [
+      {
+        "date": "2026-06-28",
+        "source_url": "https://www.reddit.com/r/surfing/comments/mundaka1",
+        "summary": "Chest-high and clean on the dawn push; barrels on the inside.",
+        "conditions": "1.5 m NW @ 13 s, light SE",
+        "crowd": "Busy, about 30 out",
+        "hazards": "Strong outgoing current near the rivermouth"
+      },
+      {
+        "date": "2026-05-15",
+        "source_url": "https://www.surfforum.example/mundaka-may",
+        "summary": "Sandbar still reforming after winter; short rides only.",
+        "conditions": "1.0 m WNW @ 10 s",
+        "crowd": "Light",
+        "hazards": "Cobblestones exposed at low tide"
+      }
+    ],
     "hazards": [
       "Powerful, fast left-hander that closes out on bigger swells; strong barrel hold-downs.",
       "Rivermouth current sweeps hard on the outgoing tide; easy to be pulled off the peak.",
