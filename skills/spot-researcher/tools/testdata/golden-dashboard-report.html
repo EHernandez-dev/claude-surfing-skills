@@ -894,6 +894,50 @@ body {
   .si-dl { grid-template-columns: 1fr; gap: 2px 0; }
   .si-dl .si-def { margin-bottom: 8px; }
 }
+/* Expanded Spot info: the at-a-glance facts strip, the two-column dossier (a
+   read column beside a sticky reference rail), The Wave's peaks list, the
+   water-quality and UV badges, the logistics lists, and the Location map.
+   Card-element rules are scoped to #panel-info so the other panels' cards
+   keep their own typography. */
+#panel-info .card h4 { margin: 16px 0 6px; font-size: 0.95rem; }
+.si-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.si-fact { display: flex; flex-direction: column; gap: 2px; }
+.si-fact-l { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.si-fact-v { font-weight: 700; }
+/* margin-top keeps a clear gap under the facts strip; the first card in each
+   column zeroes its own top margin so both columns line up. */
+.si-dossier { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; margin-top: 24px; }
+.si-rail { position: sticky; top: 72px; }
+.si-read > .card:first-child, .si-rail > .card:first-child { margin-top: 0; }
+.si-peaks { list-style: none; padding: 0; margin: 6px 0 0; }
+.si-peaks > li { padding: 10px 0; border-top: 1px solid var(--border); display: grid; gap: 2px; }
+.si-peaks > li:first-child { border-top: none; }
+.si-peak-name { font-weight: 700; }
+.si-peak-char { color: var(--ink); }
+.si-peak-when { color: var(--muted); font-size: 0.9rem; }
+.si-chip { justify-self: start; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.si-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+.si-list { margin: 6px 0 0; padding-left: 18px; }
+.si-list li { padding: 3px 0; }
+/* badges are centered pills; the colour itself is the signal (water quality
+   status, UV band: green under 3, amber 3-6, red 6+ per the WHO bands) */
+.si-badge, .si-wq-badge { display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  font-weight: 700; font-size: 0.78rem; padding: 3px 12px; border-radius: 999px; color: #fff; }
+.si-badge { min-width: 34px; }
+.si-wq-good { background: var(--go); } .si-wq-warn { background: var(--skip); }
+.si-uv-low { background: var(--go); } .si-uv-med { background: var(--check); } .si-uv-high { background: var(--skip); }
+.si-map { height: 220px; border-radius: 12px; overflow: hidden; margin-top: 4px; background: #cfd8e0; }
+.si-map .leaflet-container { height: 100%; }
+#panel-info .card h2 a { color: inherit; text-decoration: none; }
+#panel-info .card h2 a:hover { color: var(--accent); text-decoration: underline; }
+.si-def a, .si-list a, .si-peak-name a, .si-water a, .si-muted a { color: var(--accent); text-decoration: none; }
+.si-def a:hover, .si-list a:hover, .si-peak-name a:hover, .si-water a:hover, .si-muted a:hover { text-decoration: underline; }
+@media (max-width: 900px) {
+  .si-dossier { grid-template-columns: 1fr; }
+  .si-rail { position: static; }
+  .si-two { grid-template-columns: 1fr; }
+}
 </style>
 <script>(function(){try{var v=localStorage.getItem('surf-theme');if(v==='light'||v==='dark'){document.documentElement.setAttribute('data-theme',v);}}catch(e){}})();</script>
 </head>
@@ -916,11 +960,22 @@ body {
 </section>
 <section class="panel" id="panel-info" role="tabpanel" aria-labelledby="tab-info" hidden>
 <main class="wrap">
-<section class="card"><h2>Works-on profile</h2><p class="sub">Profile is 4 days old (researched 2026-07-07).</p><p class="si-desc">A world-class rivermouth left that peels fast and hollow over a shifting sandbar.</p><dl class="si-dl"><div class="si-term">Break type</div><div class="si-def">Rivermouth sandbar left</div><div class="si-term">Bottom</div><div class="si-def">Sand over cobblestone</div><div class="si-term">Wave direction</div><div class="si-def">left</div><div class="si-term">Ideal swell direction</div><div class="si-def">NW</div><div class="si-term">Ideal swell size</div><div class="si-def">1.0-3.0 m</div><div class="si-term">Ideal period</div><div class="si-def">12s+</div><div class="si-term">Ideal wind</div><div class="si-def">S/SE offshore</div><div class="si-term">Ideal tide</div><div class="si-def">Mid tide, incoming</div><div class="si-term">Best season</div><div class="si-def">Autumn (Sep-Nov)</div><div class="si-term">Ability level</div><div class="si-def">Advanced</div><div class="si-term">Crowd</div><div class="si-def">Heavy on a swell; strict pecking order</div><div class="si-term">Consistency</div><div class="si-def">Fickle; needs the sandbar and the right swell</div></dl><p class="si-bias"><strong>Model bias applied:</strong> Model runs about 0.2 m high and 0.5 s short here; corrected from 6 logged sessions. <span class="si-muted">(6 sessions, last verified 2026-07-05)</span></p></section>
-<section class="card"><h2>Buoy &amp; water</h2><p class="si-buoy"><strong>Assigned buoy:</strong> <a href="https://portus.puertos.es/">Bilbao-Vizcaya (1026)</a> · 18.4 km away</p><p class="si-water"><strong>Water temperature:</strong> 21°C <span class="si-muted">(buoy observation)</span></p><p class="si-wetsuit"><strong>Wetsuit:</strong> 3/2 mm full suit or a spring suit; boots optional.</p></section>
+<section class="card"><div class="si-facts"><div class="si-fact"><span class="si-fact-l">Break</span><span class="si-fact-v">Rivermouth sandbar left</span></div><div class="si-fact"><span class="si-fact-l">Level</span><span class="si-fact-v">Advanced</span></div><div class="si-fact"><span class="si-fact-l">Water</span><span class="si-fact-v">21°C</span></div><div class="si-fact"><span class="si-fact-l">Water quality</span><span class="si-fact-v"><span class="si-wq-badge si-wq-good">Good</span></span></div><div class="si-fact"><span class="si-fact-l">UV index</span><span class="si-fact-v"><span class="si-badge si-uv-high">6.9</span></span></div><div class="si-fact"><span class="si-fact-l">Lifeguards</span><span class="si-fact-v">Yes</span></div><div class="si-fact"><span class="si-fact-l">Profile</span><span class="si-fact-v">4d old</span></div></div></section>
+<div class="si-dossier">
+<div class="si-read">
+<section class="card"><h2>Works-on profile</h2><p class="sub">Profile is 4 days old (researched 2026-07-07).</p><dl class="si-dl"><div class="si-term">Break type</div><div class="si-def">Rivermouth sandbar left</div><div class="si-term">Bottom</div><div class="si-def">Sand over cobblestone</div><div class="si-term">Wave direction</div><div class="si-def">left</div><div class="si-term">Ideal swell direction</div><div class="si-def">NW</div><div class="si-term">Ideal swell size</div><div class="si-def">1.0-3.0 m</div><div class="si-term">Ideal period</div><div class="si-def">12s+</div><div class="si-term">Ideal wind</div><div class="si-def">S/SE offshore</div><div class="si-term">Ideal tide</div><div class="si-def">Mid tide, incoming</div><div class="si-term">Best season</div><div class="si-def">Autumn (Sep-Nov)</div><div class="si-term">Ability level</div><div class="si-def">Advanced</div><div class="si-term">Crowd</div><div class="si-def">Heavy on a swell; strict pecking order</div><div class="si-term">Consistency</div><div class="si-def">Fickle; needs the sandbar and the right swell</div></dl><p class="si-bias"><strong>Model bias applied:</strong> Model runs about 0.2 m high and 0.5 s short here; corrected from 6 logged sessions. <span class="si-muted">(6 sessions, last verified 2026-07-05)</span></p></section>
+<section class="card"><h2>The Wave</h2><p class="si-desc">A world-class rivermouth left that peels fast and hollow over a shifting sandbar.</p><p class="si-desc">On its day one of Europe&#x27;s best lefts: long, fast and hollow, shifting with the sandbar; heavy and unforgiving once the swell tops 2.5 m.</p><h4>Peaks along the beach</h4><ul class="si-peaks"><li><span class="si-peak-name">The rivermouth peak</span><span class="si-chip">Advanced</span><span class="si-peak-char">The main left off the sandbar; fast, hollow walls down the point</span><span class="si-peak-when">Works: Mid tide incoming, 1.5-2.5 m NW at 12 s+</span></li><li><span class="si-peak-name">Inside reform</span><span class="si-chip">Intermediate</span><span class="si-peak-char">Softer shoulder that reforms inside on smaller days</span><span class="si-peak-when">Works: Smaller swell, higher tide</span></li></ul></section>
 <section class="card hazards-card"><h2>Hazards</h2><ul class="hazards-list"><li>Powerful, fast left-hander that closes out on bigger swells; strong barrel hold-downs.</li><li>Rivermouth current sweeps hard on the outgoing tide; easy to be pulled off the peak.</li><li>Shallow sandbar over cobblestones at low tide; heavy wipeouts near the takeoff.</li><li>Localism and a strict lineup pecking order; respect the priority or stay on the shoulder.</li></ul></section>
-<section class="card"><h2>Webcams</h2><div class="webcams"><a class="webcam" href="https://www.surfline.com/surf-report/mundaka"><span class="name">Mundaka rivermouth cam</span><span class="tag">Paywalled</span></a><a class="webcam" href="https://www.windy.com/webcams/bermeo"><span class="name">Bermeo harbour live view</span><span class="tag">Free</span></a><a class="webcam" href="https://www.euskadi.eus/webcams/mundaka"><span class="name">Euskadi coastal cam network</span><span class="tag">Free</span></a></div></section>
+<section class="card"><h2>Buoy &amp; water</h2><p class="si-buoy"><strong>Assigned buoy:</strong> <a href="https://portus.puertos.es/">Bilbao-Vizcaya (1026)</a> · 18.4 km away</p><p class="si-water"><strong>Water temperature:</strong> 21°C <span class="si-muted">(buoy observation)</span></p><p class="si-wetsuit"><strong>Wetsuit:</strong> 3/2 mm full suit or a spring suit; boots optional.</p><p class="si-water"><strong>Water quality:</strong> <span class="si-wq-badge si-wq-good">Good</span><span class="si-muted"> · checked 2026-07-09</span></p><p class="si-muted">Estuary outflow can carry runoff after heavy rain; no active advisory and the bathing-water rating is excellent. <a href="https://www.euskadi.eus/bathing-water/mundaka">source</a></p></section>
+<section class="card"><h2>Access &amp; logistics</h2><dl class="si-dl"><div class="si-term">Parking</div><div class="si-def">Small lot above the harbour plus metered street parking in town; fills fast on a swell. · <a href="https://www.google.com/maps/search/?api=1&amp;query=43.4079,-2.6989">Map</a></div><div class="si-term">Transit</div><div class="si-def">Euskotren Bermeo line to Mundaka station, then a 5 min walk down to the harbour.</div><div class="si-term">Entry / exit</div><div class="si-def">Jump off the harbour wall on the push; exit at the small cove past the point or ride through to the beach.</div><div class="si-term">Facilities</div><div class="si-def">Toilets and showers by the harbour; surf shop in town.</div><div class="si-term">Fees</div><div class="si-def">No beach fee; street parking metered in summer.</div><div class="si-term">Lifeguards</div><div class="si-def">Yes - Summer daytime on Laida beach across the estuary; none at the point itself</div></dl><div class="si-two"><div><h4>Schools &amp; rentals</h4><ul class="si-list"><li><a href="https://www.mundakasurfshop.com/">Mundaka Surf Shop</a> - Boards, wetsuits and lessons <span class="si-muted">(~€25/half-day board)</span> · <a href="https://www.google.com/maps/search/?api=1&amp;query=Mundaka+Surf+Shop+Mundaka">Map</a></li><li>Mur Mur Surf Eskola - Lessons + rentals <span class="si-muted">(~€30 group lesson)</span> · <a href="https://www.google.com/maps/search/?api=1&amp;query=Mur+Mur+Surf+Eskola+Mundaka">Map</a></li></ul></div><div><h4>Food</h4><ul class="si-list"><li>Harbour bars in Mundaka <span class="si-muted">(Pintxos / cafés) - Post-session pintxos two minutes from the point</span></li><li>Panadería del puerto <span class="si-muted">(Bakery) - Pre-dawn coffee before first light</span></li></ul></div></div></section>
+<section class="card"><h2>Nearby alternatives</h2><ul class="si-peaks"><li><span class="si-peak-name">Laida · <a href="https://www.google.com/maps/search/?api=1&amp;query=43.4098,-2.6777">Map</a></span><span class="si-peak-when">Estuary beach across the rivermouth; mellow banks when Mundaka is too heavy.</span></li><li><span class="si-peak-name">Bakio · <a href="https://www.google.com/maps/search/?api=1&amp;query=Bakio+Mundaka">Map</a></span><span class="si-peak-when">Consistent beach break 15 min west; takes more swell directions.</span></li></ul></section>
 <section class="card"><h2>Community notes</h2><p class="sub">Recent first-hand accounts from the surf communities.</p><ul class="cn-list"><li class="cn-item"><span class="cn-date"><a href="https://www.reddit.com/r/surfing/comments/mundaka1">2026-06-28</a></span> <span class="cn-summary">Chest-high and clean on the dawn push; barrels on the inside.</span><span class="cn-meta">1.5 m NW @ 13 s, light SE · Busy, about 30 out · Strong outgoing current near the rivermouth</span></li><li class="cn-item"><span class="cn-date"><a href="https://www.surfforum.example/mundaka-may">2026-05-15</a></span> <span class="cn-summary">Sandbar still reforming after winter; short rides only.</span><span class="cn-meta">1.0 m WNW @ 10 s · Light · Cobblestones exposed at low tide</span></li></ul></section>
+</div>
+<aside class="si-rail">
+<section class="card"><h2><a href="https://www.google.com/maps/search/?api=1&amp;query=43.407,-2.699">Location</a></h2><p class="sub"><strong>Coordinates:</strong> 43.407, -2.699</p><div id="info-map" class="si-map"></div></section>
+<section class="card"><h2>Webcams</h2><div class="webcams"><a class="webcam" href="https://www.surfline.com/surf-report/mundaka"><span class="name">Mundaka rivermouth cam</span><span class="tag">Paywalled</span></a><a class="webcam" href="https://www.windy.com/webcams/bermeo"><span class="name">Bermeo harbour live view</span><span class="tag">Free</span></a><a class="webcam" href="https://www.euskadi.eus/webcams/mundaka"><span class="name">Euskadi coastal cam network</span><span class="tag">Free</span></a></div></section>
+</aside>
+</div>
 </main>
 </section>
 <main class="wrap"><footer class="footer"><p>AI-generated dashboard. Verify conditions on-site; if in doubt, don't paddle out.</p><p>A paired Markdown twin is saved alongside this file (same name, .md).</p></footer></main>
@@ -943,6 +998,18 @@ body {
   window.__surfMap = map;
 })();</script>
 <script>(function () {
+  var lat = 43.407, lon = -2.699;
+  var map = L.map('info-map', { scrollWheelZoom: false }).setView([lat, lon], 12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '\u00a9 OpenStreetMap'
+  }).addTo(map);
+  L.circleMarker([lat, lon], {
+    radius: 9, weight: 2, color: '#ffffff', fillColor: '#2b7cd3', fillOpacity: 0.9
+  }).addTo(map);
+  window.__infoMap = map;
+})();</script>
+<script>(function () {
   var panels = ['today', 'forecast', 'windows', 'info'];
   function show(name) {
     if (panels.indexOf(name) < 0) { name = 'today'; }
@@ -953,6 +1020,7 @@ body {
       if (tab) { tab.setAttribute('aria-selected', p === name ? 'true' : 'false'); }
     });
     if (name === 'today' && window.__surfMap) { window.__surfMap.invalidateSize(); }
+    if (name === 'info' && window.__infoMap) { window.__infoMap.invalidateSize(); }
   }
   function fromHash() {
     show((window.location.hash || '').replace('#', '') || 'today');

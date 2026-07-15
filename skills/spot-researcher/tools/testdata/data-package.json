@@ -355,6 +355,73 @@
         }
       ]
     },
+    "weather": {
+      "days": [
+        {
+          "date": "2026-07-11",
+          "conditions": "Mainly clear",
+          "icon": "🌤️",
+          "temp_max": 24.1,
+          "temp_min": 16.3,
+          "precip_probability_pct": 5,
+          "uv_index_max": 6.9
+        },
+        {
+          "date": "2026-07-12",
+          "conditions": "Clear sky",
+          "icon": "☀️",
+          "temp_max": 25.0,
+          "temp_min": 17.1,
+          "precip_probability_pct": 10,
+          "uv_index_max": 7.2
+        },
+        {
+          "date": "2026-07-13",
+          "conditions": "Partly cloudy",
+          "icon": "⛅",
+          "temp_max": 22.4,
+          "temp_min": 16.0,
+          "precip_probability_pct": 40,
+          "uv_index_max": 5.4
+        },
+        {
+          "date": "2026-07-14",
+          "conditions": "Light rain",
+          "icon": "🌧️",
+          "temp_max": 21.8,
+          "temp_min": 15.6,
+          "precip_probability_pct": 55,
+          "uv_index_max": 4.8
+        },
+        {
+          "date": "2026-07-15",
+          "conditions": "Partly cloudy",
+          "icon": "⛅",
+          "temp_max": 23.2,
+          "temp_min": 16.2,
+          "precip_probability_pct": 20,
+          "uv_index_max": 6.1
+        },
+        {
+          "date": "2026-07-16",
+          "conditions": "Mainly clear",
+          "icon": "🌤️",
+          "temp_max": 24.6,
+          "temp_min": 17.0,
+          "precip_probability_pct": 10,
+          "uv_index_max": 7.0
+        },
+        {
+          "date": "2026-07-17",
+          "conditions": "Partly cloudy",
+          "icon": "⛅",
+          "temp_max": 23.9,
+          "temp_min": 16.8,
+          "precip_probability_pct": 15,
+          "uv_index_max": 6.5
+        }
+      ]
+    },
     "marine": {
       "days": [
         {
@@ -2936,8 +3003,86 @@
       "ability_level": "Advanced",
       "crowd": "Heavy on a swell; strict pecking order",
       "consistency": "Fickle; needs the sandbar and the right swell",
-      "description": "A world-class rivermouth left that peels fast and hollow over a shifting sandbar."
+      "description": "A world-class rivermouth left that peels fast and hollow over a shifting sandbar.",
+      "character_notes": "On its day one of Europe's best lefts: long, fast and hollow, shifting with the sandbar; heavy and unforgiving once the swell tops 2.5 m."
     },
+    "peaks": [
+      {
+        "name": "The rivermouth peak",
+        "character": "The main left off the sandbar; fast, hollow walls down the point",
+        "suits": "Advanced",
+        "works_best": "Mid tide incoming, 1.5-2.5 m NW at 12 s+"
+      },
+      {
+        "name": "Inside reform",
+        "character": "Softer shoulder that reforms inside on smaller days",
+        "suits": "Intermediate",
+        "works_best": "Smaller swell, higher tide"
+      }
+    ],
+    "water_quality": {
+      "status": "Good",
+      "advisory": false,
+      "summary": "Estuary outflow can carry runoff after heavy rain; no active advisory and the bathing-water rating is excellent.",
+      "dated": "2026-07-09",
+      "source_url": "https://www.euskadi.eus/bathing-water/mundaka"
+    },
+    "access": {
+      "parking": "Small lot above the harbour plus metered street parking in town; fills fast on a swell.",
+      "parking_coordinates": [
+        43.4079,
+        -2.6989
+      ],
+      "transit": "Euskotren Bermeo line to Mundaka station, then a 5 min walk down to the harbour.",
+      "entry_exit": "Jump off the harbour wall on the push; exit at the small cove past the point or ride through to the beach.",
+      "facilities": "Toilets and showers by the harbour; surf shop in town.",
+      "fees": "No beach fee; street parking metered in summer."
+    },
+    "lifeguards": {
+      "covered": "yes",
+      "season_hours": "Summer daytime on Laida beach across the estuary; none at the point itself",
+      "source_url": "https://www.busturialdea.eus/lifeguards"
+    },
+    "rentals": [
+      {
+        "name": "Mundaka Surf Shop",
+        "offers": "Boards, wetsuits and lessons",
+        "price_estimate": "~€25/half-day board",
+        "url": "https://www.mundakasurfshop.com/"
+      },
+      {
+        "name": "Mur Mur Surf Eskola",
+        "offers": "Lessons + rentals",
+        "price_estimate": "~€30 group lesson",
+        "url": null
+      }
+    ],
+    "food": [
+      {
+        "name": "Harbour bars in Mundaka",
+        "type": "Pintxos / cafés",
+        "note": "Post-session pintxos two minutes from the point"
+      },
+      {
+        "name": "Panadería del puerto",
+        "type": "Bakery",
+        "note": "Pre-dawn coffee before first light"
+      }
+    ],
+    "nearby_spots": [
+      {
+        "name": "Laida",
+        "note": "Estuary beach across the rivermouth; mellow banks when Mundaka is too heavy.",
+        "approx_coordinates": "43.4098,-2.6777",
+        "facing_deg": 320
+      },
+      {
+        "name": "Bakio",
+        "note": "Consistent beach break 15 min west; takes more swell directions.",
+        "approx_coordinates": null,
+        "facing_deg": null
+      }
+    ],
     "community_notes": [
       {
         "date": "2026-06-28",

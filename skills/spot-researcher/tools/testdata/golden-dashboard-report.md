@@ -44,11 +44,17 @@ Source: WorldTides.
 
 ## Spot info
 
+- **Break:** Rivermouth sandbar left
+- **Level:** Advanced
+- **Water:** 21°C
+- **Water quality:** Good
+- **UV index:** 6.9
+- **Lifeguards:** Yes
+- **Profile:** 4d old
+
 ### Works-on profile
 
 Profile is 4 days old (researched 2026-07-07).
-
-A world-class rivermouth left that peels fast and hollow over a shifting sandbar.
 
 - **Break type:** Rivermouth sandbar left
 - **Bottom:** Sand over cobblestone
@@ -65,11 +71,14 @@ A world-class rivermouth left that peels fast and hollow over a shifting sandbar
 
 **Model bias applied:** Model runs about 0.2 m high and 0.5 s short here; corrected from 6 logged sessions. (6 sessions, last verified 2026-07-05)
 
-### Buoy & water
+### The Wave
 
-- **Assigned buoy:** [Bilbao-Vizcaya (1026)](https://portus.puertos.es/) - 18.4 km away
-- **Water temperature:** 21°C (buoy observation)
-- **Wetsuit:** 3/2 mm full suit or a spring suit; boots optional.
+A world-class rivermouth left that peels fast and hollow over a shifting sandbar.
+
+On its day one of Europe's best lefts: long, fast and hollow, shifting with the sandbar; heavy and unforgiving once the swell tops 2.5 m.
+
+- **The rivermouth peak** (Advanced) - The main left off the sandbar; fast, hollow walls down the point. Works: Mid tide incoming, 1.5-2.5 m NW at 12 s+
+- **Inside reform** (Intermediate) - Softer shoulder that reforms inside on smaller days. Works: Smaller swell, higher tide
 
 ### Hazards
 
@@ -78,13 +87,48 @@ A world-class rivermouth left that peels fast and hollow over a shifting sandbar
 - Shallow sandbar over cobblestones at low tide; heavy wipeouts near the takeoff.
 - Localism and a strict lineup pecking order; respect the priority or stay on the shoulder.
 
-### Webcams
+### Buoy & water
 
-- [Mundaka rivermouth cam](https://www.surfline.com/surf-report/mundaka) - Paywalled
-- [Bermeo harbour live view](https://www.windy.com/webcams/bermeo) - Free
-- [Euskadi coastal cam network](https://www.euskadi.eus/webcams/mundaka) - Free
+- **Assigned buoy:** [Bilbao-Vizcaya (1026)](https://portus.puertos.es/) - 18.4 km away
+- **Water temperature:** 21°C (buoy observation)
+- **Wetsuit:** 3/2 mm full suit or a spring suit; boots optional.
+- **Water quality:** Good (checked 2026-07-09) - Estuary outflow can carry runoff after heavy rain; no active advisory and the bathing-water rating is excellent. ([source](https://www.euskadi.eus/bathing-water/mundaka))
+
+### Access & logistics
+
+- **Parking:** Small lot above the harbour plus metered street parking in town; fills fast on a swell. ([Map](https://www.google.com/maps/search/?api=1&query=43.4079,-2.6989))
+- **Transit:** Euskotren Bermeo line to Mundaka station, then a 5 min walk down to the harbour.
+- **Entry / exit:** Jump off the harbour wall on the push; exit at the small cove past the point or ride through to the beach.
+- **Facilities:** Toilets and showers by the harbour; surf shop in town.
+- **Fees:** No beach fee; street parking metered in summer.
+- **Lifeguards:** Yes - Summer daytime on Laida beach across the estuary; none at the point itself
+
+**Schools & rentals:**
+
+- [Mundaka Surf Shop](https://www.mundakasurfshop.com/) - Boards, wetsuits and lessons (~€25/half-day board) ([Map](https://www.google.com/maps/search/?api=1&query=Mundaka+Surf+Shop+Mundaka))
+- Mur Mur Surf Eskola - Lessons + rentals (~€30 group lesson) ([Map](https://www.google.com/maps/search/?api=1&query=Mur+Mur+Surf+Eskola+Mundaka))
+
+**Food:**
+
+- Harbour bars in Mundaka (Pintxos / cafés) - Post-session pintxos two minutes from the point
+- Panadería del puerto (Bakery) - Pre-dawn coffee before first light
+
+### Nearby alternatives
+
+- **Laida** ([Map](https://www.google.com/maps/search/?api=1&query=43.4098,-2.6777)) - Estuary beach across the rivermouth; mellow banks when Mundaka is too heavy.
+- **Bakio** ([Map](https://www.google.com/maps/search/?api=1&query=Bakio+Mundaka)) - Consistent beach break 15 min west; takes more swell directions.
 
 ### Community notes
 
 - **[2026-06-28](https://www.reddit.com/r/surfing/comments/mundaka1)**: Chest-high and clean on the dawn push; barrels on the inside. (1.5 m NW @ 13 s, light SE · Busy, about 30 out · Strong outgoing current near the rivermouth)
 - **[2026-05-15](https://www.surfforum.example/mundaka-may)**: Sandbar still reforming after winter; short rides only. (1.0 m WNW @ 10 s · Light · Cobblestones exposed at low tide)
+
+### Location
+
+[Google Maps](https://www.google.com/maps/search/?api=1&query=43.407,-2.699) - Coordinates: 43.407, -2.699
+
+### Webcams
+
+- [Mundaka rivermouth cam](https://www.surfline.com/surf-report/mundaka) - Paywalled
+- [Bermeo harbour live view](https://www.windy.com/webcams/bermeo) - Free
+- [Euskadi coastal cam network](https://www.euskadi.eus/webcams/mundaka) - Free
