@@ -667,10 +667,12 @@ mode; it supersedes the retired `single` mode.
      `analysis.week`, swell, a one-line description); picking a row swaps in that day's full
      Today-style tide chart and hourly strip below. It is built entirely from existing payload
      (`conditions.tides.days`, `conditions.daylight.days`, `conditions.marine.days[].hours` and
-     `analysis.week`; no `fetch_conditions.py` change). The Windows panel lists `analysis.windows`:
-     the ranked best session windows for the week, best first, each with its recommended time,
-     verdict, swell/wind, and the reasoning that places it. The Markdown twin has no interaction: it
-     lists the seven days and the ranked windows. The dashboard name is stable (no verdict slug), so
+     `analysis.week`; no `fetch_conditions.py` change). The Windows panel lists `analysis.windows`
+     in date order, each day expandable to its own tide chart with the recommended session shaded
+     (rows toggle independently, so several charts can be open at once; the earliest day is open by
+     default). The stored `analysis.windows` order stays best-first (the contract); the panel sorts
+     by date for display. The Markdown twin has no interaction: it lists the seven days and the
+     windows (in the same date order, no charts). The dashboard name is stable (no verdict slug), so
      a re-run the same day overwrites both files.
    - Soft failure: `{"error": ..., "note": ...}`. The markdown report/twin remain readable; note the
      failure to the user and continue, do not block on it.

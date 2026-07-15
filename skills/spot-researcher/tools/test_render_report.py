@@ -507,32 +507,60 @@ class TestWindowsPanel:
     def _windows_slice(self, out):
         return out[out.index('id="panel-windows"'):out.index('id="panel-info"')]
 
-    def test_ranked_windows_best_first_in_package_order(self):
+    def test_windows_in_date_order_no_rank_badge(self):
         win = self._windows_slice(render_dashboard(load_package()))
         assert "Best windows this week" in win
-        # one row per ranked window in the fixture (4), numbered best-first
-        assert win.count('class="win-row') == 4
-        rank_positions = [win.index(f'>{n}</div>') for n in (1, 2, 3, 4)]
-        assert rank_positions == sorted(rank_positions)
-        # the top-ranked window is flagged as the pick
-        assert "win-best" in win
+        # one item per window in the fixture (4)
+        assert win.count('class="al-item') == 4
+        # rows run in DATE order (ascending), not the fixture's best-first order
+        dates = ["Sat 11-07-2026", "Wed 15-07-2026", "Thu 16-07-2026", "Fri 17-07-2026"]
+        positions = [win.index(d) for d in dates]
+        assert positions == sorted(positions)
+        # no numeric rank badge is emitted
+        assert 'class="win-num"' not in win
+
+    def test_dates_are_ddmmyyyy(self):
+        win = self._windows_slice(render_dashboard(load_package()))
+        assert "Sat 11-07-2026" in win  # DD-MM-YYYY, weekday kept
+        assert "2026-07-11" not in win  # the ISO form is not shown
 
     def test_each_window_carries_time_verdict_swell_wind(self):
         win = self._windows_slice(render_dashboard(load_package()))
-        assert "07:15-10:00" in win  # recommended time of the best window
+        assert "07:15-10:00" in win  # recommended time
         assert "Dawn patrol" in win  # window label
         assert "1.5 m NW @ 14 s" in win  # swell
         assert "6 km/h offshore" in win  # wind
         assert "chip-go" in win and "chip-check" in win  # verdict chips
-        # weekday + date for each window, resolved from the date
-        assert "Thu 2026-07-16" in win
+
+    def test_earliest_day_open_by_default(self):
+        win = self._windows_slice(render_dashboard(load_package()))
+        # exactly one item open on load, and it is the first (earliest) one
+        assert win.count('class="al-item open"') == 1
+        assert win.index('class="al-item open"') < win.index('class="al-item"')
+
+    def test_each_day_has_its_own_chart_multi_open_capable(self):
+        out = render_dashboard(load_package())
+        win = self._windows_slice(out)
+        # one pre-rendered tide chart per window (multi-open: each item owns one)
+        assert win.count('class="al-chart"') == 4
+        assert win.count('class="tide-chart') == 4
+        # toggle is independent per row (not the single-select Forecast sweep)
+        assert "classList.toggle('open')" in out
+        assert win.count('class="al-row"') == 4
+
+    def test_window_shaded_on_its_own_day_chart(self):
+        win = self._windows_slice(render_dashboard(load_package()))
+        # the recommended window is drawn as a shaded band with its label on the
+        # chart (tide_svg shades any windows passed to it)
+        assert "tide-window" in win
+        assert win.count("Dawn patrol") >= 3  # 3 of the 4 fixture windows use it
 
     def test_works_on_correction_reason_shown(self):
         win = self._windows_slice(render_dashboard(load_package()))
-        # the reasoning that places each window (tide/works-on context)
+        # the reasoning that places each window sits below the day (al-why)
+        assert 'class="al-why"' in win
         assert "works-on window" in win
         assert "mid-incoming tide" in win
-        # a demoted/dropped out-of-window day is stated
         assert "dropped as outside the window" in win
 
     def test_no_windows_renders_empty_state(self):
@@ -540,7 +568,7 @@ class TestWindowsPanel:
         pkg["analysis"].pop("windows", None)
         win = self._windows_slice(render_dashboard(pkg))
         assert "No standout session windows" in win
-        assert 'class="win-row' not in win
+        assert 'class="al-item' not in win
 
     def test_windows_absent_key_treated_as_empty(self):
         pkg = load_package()
@@ -784,13 +812,16 @@ class TestDashboardMarkdown:
         assert "**Saturday 2026-07-11** - \U0001f7e2 GO" in forecast
         assert "1.2 m NW @ 13 s" in forecast  # swell + wind detail
 
-    def test_windows_section_lists_ranked_windows(self):
+    def test_windows_section_lists_windows_in_date_order(self):
         md = render_dashboard_markdown(load_package())
         windows = md[md.index("## Windows"):md.index("## Spot info")]
-        # one bullet per ranked window, best first
+        # one bullet per window, in date order with DD-MM-YYYY dates
         assert windows.count("\n- **") == 4
-        assert "**Thu 2026-07-16** 07:15-10:00" in windows  # when + time, first
-        assert "1.5 m NW @ 14 s" in windows  # swell detail
+        assert "**Sat 11-07-2026** 07:00-10:30" in windows  # earliest first, when + time
+        order = [windows.index(d) for d in
+                 ("Sat 11-07-2026", "Wed 15-07-2026", "Thu 16-07-2026", "Fri 17-07-2026")]
+        assert order == sorted(order)
+        assert "1.2 m NW @ 13 s" in windows  # swell detail
         assert "works-on window" in windows  # reasoning shown
 
     def test_info_section_is_placeholder(self):

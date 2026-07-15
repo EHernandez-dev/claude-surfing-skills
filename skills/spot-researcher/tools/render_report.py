@@ -955,24 +955,37 @@ DASHBOARD_CSS = """
 .theme-seg button:hover { color: var(--ink); }
 .theme-seg button[aria-pressed="true"] { color: #fff; background: var(--accent); }
 .panel[hidden] { display: none; }
-.win-row {
-  display: flex; align-items: flex-start; gap: 14px; padding: 13px 0;
-  border-top: 1px solid var(--border);
+/* the Windows panel spans full width so its per-day charts are as large as possible */
+.wrap-wide { max-width: none; }
+/* Windows: day (+ its description) on the left, that day's chart alongside on
+   the right, at the same height. Rows toggle independently (see WINDOWS_JS). */
+.al-grid { display: flex; flex-direction: column; margin-top: 4px; }
+.al-item {
+  display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start;
+  border-top: 1px solid var(--border); padding: 12px 0;
 }
-.win-row:first-of-type { border-top: none; }
-.win-row.win-best { background: color-mix(in srgb, var(--go) 8%, transparent); }
-.win-num {
-  flex: none; width: 26px; height: 26px; border-radius: 50%;
-  display: grid; place-items: center; font-weight: 700; font-size: 0.85rem;
-  background: var(--accent); color: #fff;
+.al-item:first-child { border-top: none; }
+.al-left { min-width: 0; }
+.al-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px; border: none; border-radius: 10px; background: none; font: inherit;
+  color: var(--ink); cursor: pointer; text-align: left;
 }
-.win-main { flex: 1; min-width: 0; }
-.win-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.win-when { font-weight: 700; }
-.win-time { color: var(--muted); }
-.win-detail { color: var(--muted); font-size: 0.92rem; margin-top: 3px; }
-.win-why { font-size: 0.9rem; margin-top: 5px; }
+.al-row:hover { background: var(--page); }
+.al-item.open .al-row { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.al-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.al-when { font-weight: 700; }
+.al-time { color: var(--muted); }
+.al-detail { color: var(--muted); font-size: 0.9rem; }
+.al-caret { margin-left: auto; transition: transform 0.15s; }
+.al-item.open .al-caret { transform: rotate(90deg); }
+.al-why { font-size: 0.92rem; color: var(--muted); margin: 10px 10px 0; }
+.al-chart { min-width: 0; }
+.al-item:not(.open) .al-why, .al-item:not(.open) .al-chart { display: none; }
 .chip.win-verdict { font-size: 0.72rem; padding: 3px 9px; }
+@media (max-width: 760px) {
+  .al-item { grid-template-columns: 1fr; gap: 8px; }  /* chart stacks under the day */
+}
 .placeholder { color: var(--muted); }
 .tide-week { margin-top: 6px; }
 .tide-week .tide-curve { stroke-width: 1.3; }
@@ -1130,6 +1143,25 @@ FORECAST_JS = """(function () {
     });
   });
 })();"""
+
+# Windows panel: each day row toggles its own chart open/closed, independently,
+# so several can be open at once (unlike the single-select Forecast toggle). CSS
+# reveals .al-why / .al-chart only when the .al-item carries the `open` class.
+WINDOWS_JS = """(function () {
+  var panel = document.getElementById('panel-windows');
+  if (!panel) { return; }
+  panel.addEventListener('click', function (e) {
+    var row = e.target.closest('.al-row');
+    if (!row || !panel.contains(row)) { return; }
+    var item = row.closest('.al-item');
+    var open = item.classList.toggle('open');
+    row.setAttribute('aria-expanded', String(open));
+  });
+})();"""
+
+# Shown in place of a per-day tide chart when that day has no tide extremes
+# (used by both the Forecast per-day drilldown and the Windows panel).
+_NO_TIDE_DAY_NOTE = '<p class="tide-note">No tide data for this day.</p>'
 
 # The four dashboard tabs, in fixed display order.
 DASHBOARD_TABS = [
@@ -1410,7 +1442,7 @@ def _forecast_panel_html(view: dict[str, Any]) -> str:
                 day["hours"], view["swell_unit"], view["wind_unit"], id_prefix=f"fc{i}",
             )
         else:
-            chart = '<p class="tide-note">No tide data for this day.</p>'
+            chart = _NO_TIDE_DAY_NOTE
         hidden = "" if i == 0 else " hidden"
         details.append(
             f'<div class="fc-detail" data-day="{i}"{hidden}>'
@@ -1428,42 +1460,74 @@ def _forecast_panel_html(view: dict[str, Any]) -> str:
     return f'<main class="wrap">\n{overview}\n{by_day}\n</main>'
 
 
-def _windows_view(package: dict[str, Any]) -> dict[str, Any]:
-    """Resolve the ranked session windows shared by the HTML and Markdown twins.
+def _fmt_ddmmyyyy(iso: str | None) -> str:
+    """ISO `YYYY-MM-DD` -> `DD-MM-YYYY` (the date convention the dashboard uses)."""
+    if not iso:
+        return ""
+    try:
+        return date.fromisoformat(iso).strftime("%d-%m-%Y")
+    except ValueError:
+        return str(iso)
 
-    Reads `analysis.windows`: a ranked list (best first) of the best session
-    windows over the forecast week. Each entry is `{date, window: {from, to,
-    label}, verdict, swell, wind, why}`, already ordered and corrected to the
-    spot's works-on profile by the producing command (out-of-window swell
-    demoted/dropped, times shifted toward the ideal tide), with the reasoning in
-    `why`. The renderer preserves the given order and only formats. A missing or
-    empty list resolves to an empty ranking, which both twins render as the
-    explicit checked-and-absent state.
+
+def _windows_view(package: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the session windows shared by the HTML and Markdown twins.
+
+    Reads `analysis.windows`: the best session windows over the forecast week,
+    each `{date, window: {from, to, label}, verdict, swell, wind, why}`, already
+    corrected to the spot's works-on profile by the producing command (out-of-
+    window swell demoted/dropped, times shifted toward the ideal tide) with the
+    reasoning in `why`. The stored order is best-first (the contract), but the
+    dashboard shows windows in DATE order and no longer surfaces a rank, so this
+    resolver sorts the resolved list by date and drops the rank concept.
+
+    Each window is paired with its day's tide geometry (`extremes`, `daylight`,
+    `hours`) looked up from `_forecast_view`, so the panel can draw that day's
+    chart with the recommended window shaded without any new per-day assembly or
+    `fetch_conditions.py` change. A missing or empty list resolves to an empty
+    result, which both twins render as the explicit checked-and-absent state.
     """
     windows = package.get("analysis", {}).get("windows") or []
+    fv = _forecast_view(package)
+    day_by_date = {d["date"]: d for d in fv["days"] if d.get("date")}
     resolved = []
     for entry in windows:
         d = entry.get("date")
         window = entry.get("window") or {}
         frm, to = window.get("from"), window.get("to")
+        day = day_by_date.get(d) or {}
         resolved.append({
             "date": d,
-            "when": f"{_weekday(d, WEEKDAY_ABBR)} {d}".strip() if d else "This week",
+            "when": f"{_weekday(d, WEEKDAY_ABBR)} {_fmt_ddmmyyyy(d)}".strip() if d else "This week",
             "time_range": f"{frm}-{to}" if (frm or to) else "",
             "label": str(window.get("label") or ""),
             "verdict": entry.get("verdict", "check"),
             "detail": _swell_wind(entry),
             "why": str(entry.get("why") or ""),
+            "window": window,
+            "extremes": day.get("extremes") or [],
+            "daylight": day.get("daylight"),
+            "hours": day.get("hours") or [],
         })
-    return {"windows": resolved}
+    resolved.sort(key=lambda w: w["date"] or "")  # date order (ISO sorts chronologically)
+    return {
+        "windows": resolved,
+        "tide_unit": fv["tide_unit"],
+        "swell_unit": fv["swell_unit"],
+        "wind_unit": fv["wind_unit"],
+    }
 
 
 def _windows_panel_html(view: dict[str, Any]) -> str:
-    """Build the Windows panel: the ranked best session windows for the week.
+    """Build the Windows panel: the week's session windows, day by day.
 
-    One card of ranked rows, best first (order preserved from `_windows_view`),
-    each carrying its number, day + recommended time, verdict chip, swell/wind,
-    and the reasoning that places it. An empty ranking renders the explicit
+    A full-width, two-column list (see `.al-*` in DASHBOARD_CSS). Each window is
+    an `.al-item`: on the LEFT a day selector button (day + recommended time +
+    verdict chip + swell/wind) with the reasoning below it; on the RIGHT that
+    day's full tide chart with the recommended window shaded, at the same height.
+    Rows are in date order and toggle independently (see WINDOWS_JS), so several
+    charts can be open at once; the earliest day is open by default. Charts are
+    pre-rendered, so toggling never refetches. An empty list renders the explicit
     "no standout windows" state so it reads as checked-and-absent, not broken.
     """
     esc = html.escape
@@ -1475,29 +1539,38 @@ def _windows_panel_html(view: dict[str, Any]) -> str:
             "Checked the next 7 days; nothing stood out.</p></section></main>"
         )
 
-    rows = []
+    items = []
     for i, w in enumerate(windows):
         chip = _verdict_chip(w["verdict"], extra_class="win-verdict", short=True)
         time_bits = " · ".join(esc(b) for b in (w["time_range"], w["label"]) if b)
-        detail = esc(w["detail"])
-        why = f'<div class="win-why">{esc(w["why"])}</div>' if w["why"] else ""
-        row_class = "win-row win-best" if i == 0 else "win-row"
-        rows.append(
-            f'<div class="{row_class}">'
-            f'<div class="win-num">{i + 1}</div>'
-            '<div class="win-main">'
-            f'<div class="win-head"><span class="win-when">{esc(w["when"])}</span>'
-            f'<span class="win-time">{time_bits}</span>'
-            f"{chip}</div>"
-            f'<div class="win-detail">{detail}</div>'
-            f"{why}</div></div>"
+        why = f'<p class="al-why">{esc(w["why"])}</p>' if w["why"] else ""
+        if w["extremes"]:
+            chart = tide_svg(
+                w["extremes"], [w["window"]], w["daylight"], view["tide_unit"],
+                w["hours"], view["swell_unit"], view["wind_unit"], id_prefix=f"win{i}",
+            )
+        else:
+            chart = _NO_TIDE_DAY_NOTE
+        open_cls = " open" if i == 0 else ""  # earliest day open by default
+        items.append(
+            f'<div class="al-item{open_cls}">'
+            '<div class="al-left">'
+            f'<button class="al-row" type="button" aria-expanded="{"true" if i == 0 else "false"}">'
+            f'<span class="al-main"><span class="al-when">{esc(w["when"])}</span>'
+            f'<span class="al-time">{time_bits}</span>'
+            f'<span class="al-detail">{esc(w["detail"])}</span></span>'
+            f'{chip}<span class="al-caret">▸</span></button>'
+            f"{why}</div>"
+            f'<div class="al-chart">{chart}</div>'
+            "</div>"
         )
 
     return (
-        '<main class="wrap"><section class="card"><h2>Best windows this week</h2>'
-        '<p class="sub">The best session windows over the next 7 days, best first. '
-        "Corrected to this spot's works-on profile where one exists.</p>"
-        f'{"".join(rows)}</section></main>'
+        '<main class="wrap wrap-wide"><section class="card"><h2>Best windows this week</h2>'
+        '<p class="sub">The week\'s best session windows in date order. Click a day '
+        "to open its tide chart; the shaded band is the recommended session. Open "
+        "as many as you like.</p>"
+        f'<div class="al-grid">{"".join(items)}</div></section></main>'
     )
 
 
@@ -1596,6 +1669,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"<script>{TOGGLE_JS}</script>\n"
         f"<script>{THEME_JS}</script>\n"
         f"<script>{FORECAST_JS}</script>\n"
+        f"<script>{WINDOWS_JS}</script>\n"
         "</body>\n</html>\n"
     )
 
@@ -1670,8 +1744,8 @@ def render_dashboard_markdown(package: dict[str, Any]) -> str:
     else:
         lines += ["_No 7-day forecast is available for this spot._", ""]
 
-    # Windows: the ranked best session windows for the week, best first, mirroring
-    # the HTML Windows panel. Markdown has no interaction; it just lists them.
+    # Windows: the week's session windows in date order, mirroring the HTML
+    # Windows panel. Markdown has no interaction; it just lists them (no charts).
     windows = _windows_view(package)["windows"]
     lines += ["## Windows", ""]
     if windows:
