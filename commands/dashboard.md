@@ -5,7 +5,7 @@ description: Build and open a spot's tabbed HTML surf Dashboard (Today / Forecas
 
 # Surf Dashboard
 
-Build the single self-contained **Dashboard** for one spot: a tabbed HTML page (Today / Forecast / Windows / Spot info) that opens in the browser. This is the primary entry point for a full look at a spot. The Today tab is populated now (verdict, target-day conditions, and the tide chart with the aligned hourly strip clipped to daylight); the other three tabs are present as placeholders that later updates fill in.
+Build the single self-contained **Dashboard** for one spot: a tabbed HTML page (Today / Forecast / Windows / Spot info) that opens in the browser. This is the primary entry point for a full look at a spot. The Today, Forecast and Windows tabs are populated (Today: verdict, target-day conditions, and the tide chart with the aligned hourly strip clipped to daylight; Forecast: the interactive 7-day overview and per-day drilldown; Windows: the ranked best session windows for the week); the Spot info tab is a placeholder that a later update fills in.
 
 **This command is quiet.** On success, print nothing to chat except the opened file path (e.g. `Opened reports/2026-07-11-mundaka-dashboard.html`). Do NOT dump conditions, tables, or a verdict into the terminal: the Dashboard is where they are read. Only speak up when there is no HTML to open: a fetch failure or missing setup (see the failure path below).
 
@@ -59,6 +59,7 @@ Build the same Phase 5A data package the research flow produces (see SKILL.md St
 - `conditions`: the fetch payload verbatim, including a `report.filenames` object with `go`/`check`/`skip` entries under `reports/{target-date}-{slug}-{verdict}.md` (the renderer derives the stable dashboard name `reports/{target-date}-{slug}-dashboard.html` from it; the verdict slug itself is not used in the dashboard filename).
 - `analysis.target_day`: `date`, `verdict` (`go`/`check`/`skip`, spot-corrected against the works-on profile when one exists), `one_liner`, `windows` (`[{from, to, label}]`).
 - `analysis.week`: one entry per forecast day (`{date, verdict, swell, wind, why}`, display-ready strings with unit labels applied).
+- `analysis.windows`: the ranked best session windows over the week, best first (`[{date, window: {from, to, label}, verdict, swell, wind, why}]`, display-ready strings). For a profiled spot, rank against the works-on profile (demote or drop out-of-window swell, shift times toward the ideal tide) and say why in `why`. Omit or leave empty when nothing stands out; the Windows tab then shows a "no standout windows" state.
 
 Write the package to a JSON file (a temp path is fine).
 
@@ -74,7 +75,7 @@ uv run --project "${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools" python \
 
 On exit 0 the script prints JSON either way:
 
-- **Success:** `{"html_path": "reports/{date}-{slug}-dashboard.html", "md_path": "reports/{date}-{slug}-dashboard.md"}`. It writes the self-contained HTML Dashboard plus a paired flat Markdown twin (Today section populated, the other three stacked as placeholders). A re-run the same day overwrites both.
+- **Success:** `{"html_path": "reports/{date}-{slug}-dashboard.html", "md_path": "reports/{date}-{slug}-dashboard.md"}`. It writes the self-contained HTML Dashboard plus a paired flat Markdown twin (Today, Forecast and Windows sections populated, Spot info stacked as a placeholder). A re-run the same day overwrites both.
 - **Soft failure:** `{"error": ..., "note": ...}`. There is no HTML to open, so speak: report the error and point the user at the Markdown twin / manual links.
 
 Open the HTML on the **Today** tab (no fragment needed; Today is the default):

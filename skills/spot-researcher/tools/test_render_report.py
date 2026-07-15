@@ -400,12 +400,12 @@ class TestRenderDashboard:
         assert 'class="strip-bar' in today  # aligned hourly strip
         assert "tide &amp; session windows" in today
 
-    def test_windows_and_info_panels_are_placeholders(self):
+    def test_info_panel_is_placeholder(self):
         out = render_dashboard(load_package())
-        rest = out[out.index('id="panel-windows"'):]
-        assert rest.count('class="placeholder"') == 2  # windows + info only
+        rest = out[out.index('id="panel-info"'):]
+        assert rest.count('class="placeholder"') == 1  # info only
         assert "later update" in rest
-        # the populated Today/Forecast tide charts do not leak into the placeholders
+        # the populated Today/Forecast tide charts do not leak into the placeholder
         assert 'class="tide-chart"' not in rest
 
     def test_map_hero_and_invalidate_on_today(self):
@@ -501,6 +501,52 @@ class TestForecastPanel:
         fc = self._forecast_slice(render_dashboard(pkg))
         assert "No 7-day forecast is available" in fc
         assert "tide-week" not in fc
+
+
+class TestWindowsPanel:
+    def _windows_slice(self, out):
+        return out[out.index('id="panel-windows"'):out.index('id="panel-info"')]
+
+    def test_ranked_windows_best_first_in_package_order(self):
+        win = self._windows_slice(render_dashboard(load_package()))
+        assert "Best windows this week" in win
+        # one row per ranked window in the fixture (4), numbered best-first
+        assert win.count('class="win-row') == 4
+        rank_positions = [win.index(f'>{n}</div>') for n in (1, 2, 3, 4)]
+        assert rank_positions == sorted(rank_positions)
+        # the top-ranked window is flagged as the pick
+        assert "win-best" in win
+
+    def test_each_window_carries_time_verdict_swell_wind(self):
+        win = self._windows_slice(render_dashboard(load_package()))
+        assert "07:15-10:00" in win  # recommended time of the best window
+        assert "Dawn patrol" in win  # window label
+        assert "1.5 m NW @ 14 s" in win  # swell
+        assert "6 km/h offshore" in win  # wind
+        assert "chip-go" in win and "chip-check" in win  # verdict chips
+        # weekday + date for each window, resolved from the date
+        assert "Thu 2026-07-16" in win
+
+    def test_works_on_correction_reason_shown(self):
+        win = self._windows_slice(render_dashboard(load_package()))
+        # the reasoning that places each window (tide/works-on context)
+        assert "works-on window" in win
+        assert "mid-incoming tide" in win
+        # a demoted/dropped out-of-window day is stated
+        assert "dropped as outside the window" in win
+
+    def test_no_windows_renders_empty_state(self):
+        pkg = load_package()
+        pkg["analysis"].pop("windows", None)
+        win = self._windows_slice(render_dashboard(pkg))
+        assert "No standout session windows" in win
+        assert 'class="win-row' not in win
+
+    def test_windows_absent_key_treated_as_empty(self):
+        pkg = load_package()
+        pkg["analysis"]["windows"] = []
+        win = self._windows_slice(render_dashboard(pkg))
+        assert "No standout session windows" in win
 
 
 class TestWeekTideSvg:
@@ -738,9 +784,25 @@ class TestDashboardMarkdown:
         assert "**Saturday 2026-07-11** - \U0001f7e2 GO" in forecast
         assert "1.2 m NW @ 13 s" in forecast  # swell + wind detail
 
-    def test_windows_and_info_sections_are_placeholders(self):
+    def test_windows_section_lists_ranked_windows(self):
         md = render_dashboard_markdown(load_package())
-        assert md.count("later update") == 2  # windows + info only
+        windows = md[md.index("## Windows"):md.index("## Spot info")]
+        # one bullet per ranked window, best first
+        assert windows.count("\n- **") == 4
+        assert "**Thu 2026-07-16** 07:15-10:00" in windows  # when + time, first
+        assert "1.5 m NW @ 14 s" in windows  # swell detail
+        assert "works-on window" in windows  # reasoning shown
+
+    def test_info_section_is_placeholder(self):
+        md = render_dashboard_markdown(load_package())
+        assert md.count("later update") == 1  # info only
+
+    def test_empty_windows_section_reads_as_checked_and_absent(self):
+        pkg = load_package()
+        pkg["analysis"]["windows"] = []
+        md = render_dashboard_markdown(pkg)
+        windows = md[md.index("## Windows"):md.index("## Spot info")]
+        assert "No standout session windows" in windows
 
     def test_no_tides_falls_back_to_note(self):
         pkg = load_package()

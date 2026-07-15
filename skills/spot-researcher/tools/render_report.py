@@ -955,6 +955,24 @@ DASHBOARD_CSS = """
 .theme-seg button:hover { color: var(--ink); }
 .theme-seg button[aria-pressed="true"] { color: #fff; background: var(--accent); }
 .panel[hidden] { display: none; }
+.win-row {
+  display: flex; align-items: flex-start; gap: 14px; padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+.win-row:first-of-type { border-top: none; }
+.win-row.win-best { background: color-mix(in srgb, var(--go) 8%, transparent); }
+.win-num {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 700; font-size: 0.85rem;
+  background: var(--accent); color: #fff;
+}
+.win-main { flex: 1; min-width: 0; }
+.win-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.win-when { font-weight: 700; }
+.win-time { color: var(--muted); }
+.win-detail { color: var(--muted); font-size: 0.92rem; margin-top: 3px; }
+.win-why { font-size: 0.9rem; margin-top: 5px; }
+.chip.win-verdict { font-size: 0.72rem; padding: 3px 9px; }
 .placeholder { color: var(--muted); }
 .tide-week { margin-top: 6px; }
 .tide-week .tide-curve { stroke-width: 1.3; }
@@ -1122,10 +1140,9 @@ DASHBOARD_TABS = [
 ]
 
 # Placeholder copy for the panels this slice does not yet populate; later slices
-# replace each body. Today and Forecast are populated; Windows and Spot info are
-# still placeholders. Kept in sync with the Markdown twin's placeholders.
+# replace each body. Today, Forecast and Windows are populated; Spot info is
+# still a placeholder. Kept in sync with the Markdown twin's placeholders.
 PANEL_PLACEHOLDERS = {
-    "windows": ("Windows", "The ranked session windows for this week land here in a later update."),
     "info": (
         "Spot info",
         "The works-on profile, hazards, webcams, and community notes land here in a later update.",
@@ -1411,13 +1428,86 @@ def _forecast_panel_html(view: dict[str, Any]) -> str:
     return f'<main class="wrap">\n{overview}\n{by_day}\n</main>'
 
 
+def _windows_view(package: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the ranked session windows shared by the HTML and Markdown twins.
+
+    Reads `analysis.windows`: a ranked list (best first) of the best session
+    windows over the forecast week. Each entry is `{date, window: {from, to,
+    label}, verdict, swell, wind, why}`, already ordered and corrected to the
+    spot's works-on profile by the producing command (out-of-window swell
+    demoted/dropped, times shifted toward the ideal tide), with the reasoning in
+    `why`. The renderer preserves the given order and only formats. A missing or
+    empty list resolves to an empty ranking, which both twins render as the
+    explicit checked-and-absent state.
+    """
+    windows = package.get("analysis", {}).get("windows") or []
+    resolved = []
+    for entry in windows:
+        d = entry.get("date")
+        window = entry.get("window") or {}
+        frm, to = window.get("from"), window.get("to")
+        resolved.append({
+            "date": d,
+            "when": f"{_weekday(d, WEEKDAY_ABBR)} {d}".strip() if d else "This week",
+            "time_range": f"{frm}-{to}" if (frm or to) else "",
+            "label": str(window.get("label") or ""),
+            "verdict": entry.get("verdict", "check"),
+            "detail": _swell_wind(entry),
+            "why": str(entry.get("why") or ""),
+        })
+    return {"windows": resolved}
+
+
+def _windows_panel_html(view: dict[str, Any]) -> str:
+    """Build the Windows panel: the ranked best session windows for the week.
+
+    One card of ranked rows, best first (order preserved from `_windows_view`),
+    each carrying its number, day + recommended time, verdict chip, swell/wind,
+    and the reasoning that places it. An empty ranking renders the explicit
+    "no standout windows" state so it reads as checked-and-absent, not broken.
+    """
+    esc = html.escape
+    windows = view["windows"]
+    if not windows:
+        return (
+            '<main class="wrap"><section class="card"><h2>Best windows this week</h2>'
+            '<p class="placeholder">No standout session windows this week. '
+            "Checked the next 7 days; nothing stood out.</p></section></main>"
+        )
+
+    rows = []
+    for i, w in enumerate(windows):
+        chip = _verdict_chip(w["verdict"], extra_class="win-verdict", short=True)
+        time_bits = " · ".join(esc(b) for b in (w["time_range"], w["label"]) if b)
+        detail = esc(w["detail"])
+        why = f'<div class="win-why">{esc(w["why"])}</div>' if w["why"] else ""
+        row_class = "win-row win-best" if i == 0 else "win-row"
+        rows.append(
+            f'<div class="{row_class}">'
+            f'<div class="win-num">{i + 1}</div>'
+            '<div class="win-main">'
+            f'<div class="win-head"><span class="win-when">{esc(w["when"])}</span>'
+            f'<span class="win-time">{time_bits}</span>'
+            f"{chip}</div>"
+            f'<div class="win-detail">{detail}</div>'
+            f"{why}</div></div>"
+        )
+
+    return (
+        '<main class="wrap"><section class="card"><h2>Best windows this week</h2>'
+        '<p class="sub">The best session windows over the next 7 days, best first. '
+        "Corrected to this spot's works-on profile where one exists.</p>"
+        f'{"".join(rows)}</section></main>'
+    )
+
+
 def render_dashboard(package: dict[str, Any]) -> str:
     """Render the self-contained tabbed Dashboard HTML document for a package.
 
     One file: a four-button tab bar (Today / Forecast / Windows / Spot info),
     four panels, and an inline toggle script that shows one panel at a time (the
-    opening tab is chosen by a URL fragment; default Today). The Today and
-    Forecast panels are populated; Windows and Spot info are still placeholders.
+    opening tab is chosen by a URL fragment; default Today). The Today,
+    Forecast and Windows panels are populated; Spot info is still a placeholder.
     Reads Leaflet's vendored CSS/JS for inlining (raises OSError when missing,
     which the CLI
     turns into a soft failure). Every value drawn from the package is
@@ -1432,6 +1522,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
 
     today_body, map_js = _today_panel_html(view)
     forecast_body = _forecast_panel_html(_forecast_view(package))
+    windows_body = _windows_panel_html(_windows_view(package))
 
     # --- Tab bar (fixed order) ---------------------------------------------
     tab_buttons = "".join(
@@ -1457,10 +1548,10 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"{tab_buttons}{theme_control}</nav>"
     )
 
-    # --- Panels (Today + Forecast populated; Windows / Spot info placeholders) --
+    # --- Panels (Today + Forecast + Windows populated; Spot info placeholder) --
     # Populated bodies are looked up by tab key; any tab without one falls back
     # to its placeholder card, so render_dashboard stays tab-agnostic.
-    populated = {"today": today_body, "forecast": forecast_body}
+    populated = {"today": today_body, "forecast": forecast_body, "windows": windows_body}
     panels = []
     for key, _label in DASHBOARD_TABS:
         body = populated.get(key)
@@ -1578,6 +1669,35 @@ def render_dashboard_markdown(package: dict[str, Any]) -> str:
         lines.append("")
     else:
         lines += ["_No 7-day forecast is available for this spot._", ""]
+
+    # Windows: the ranked best session windows for the week, best first, mirroring
+    # the HTML Windows panel. Markdown has no interaction; it just lists them.
+    windows = _windows_view(package)["windows"]
+    lines += ["## Windows", ""]
+    if windows:
+        for w in windows:
+            v_emoji, v_label = VERDICT_DISPLAY.get(
+                w["verdict"], ("", str(w["verdict"]).upper())
+            )
+            head = f"**{w['when']}**"
+            if w["time_range"]:
+                head += f" {w['time_range']}"
+            if w["label"]:
+                head += f" · {w['label']}"
+            verdict_str = f"{v_emoji} {v_label}".strip()
+            line = f"- {head} - {verdict_str}"
+            if w["detail"]:
+                line += f" - {w['detail']}"
+            lines.append(line)
+            if w["why"]:
+                lines.append(f"  - {w['why']}")
+        lines.append("")
+    else:
+        lines += [
+            "_No standout session windows this week. Checked the next 7 days; "
+            "nothing stood out._",
+            "",
+        ]
 
     for key, _ in DASHBOARD_TABS:
         if key not in PANEL_PLACEHOLDERS:

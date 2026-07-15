@@ -2978,6 +2978,56 @@
         "wind": "16 km/h cross-shore",
         "why": "still fun early before the wind builds"
       }
+    ],
+    "windows": [
+      {
+        "date": "2026-07-16",
+        "window": {
+          "from": "07:15",
+          "to": "10:00",
+          "label": "Dawn patrol"
+        },
+        "verdict": "go",
+        "swell": "1.5 m NW @ 14 s",
+        "wind": "6 km/h offshore",
+        "why": "Cleanest of the week: solid NW groundswell square in the works-on window, light offshore. Shifted to the morning push toward mid-incoming tide."
+      },
+      {
+        "date": "2026-07-11",
+        "window": {
+          "from": "07:00",
+          "to": "10:30",
+          "label": "Dawn patrol"
+        },
+        "verdict": "go",
+        "swell": "1.2 m NW @ 13 s",
+        "wind": "8 km/h offshore",
+        "why": "Clean NW groundswell in the works-on window, light offshore before the sea breeze fills in. Timed to the incoming tide."
+      },
+      {
+        "date": "2026-07-17",
+        "window": {
+          "from": "07:30",
+          "to": "09:30",
+          "label": "Dawn patrol"
+        },
+        "verdict": "check",
+        "swell": "1.1 m NW @ 12 s",
+        "wind": "16 km/h cross-shore",
+        "why": "Fun size NW in the swell window, but cross-shore builds after mid-morning; go early on the incoming tide."
+      },
+      {
+        "date": "2026-07-15",
+        "window": {
+          "from": "08:00",
+          "to": "10:00",
+          "label": "Morning"
+        },
+        "verdict": "check",
+        "swell": "0.8 m NW @ 10 s",
+        "wind": "12 km/h cross-shore",
+        "why": "Small but in the works-on window on the incoming tide; marginal, dawn only. Wed/Thu W onshore swells dropped as outside the window."
+      }
     ]
   },
   "gaps": []

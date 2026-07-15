@@ -33,7 +33,14 @@ Source: WorldTides.
 
 ## Windows
 
-_The ranked session windows for this week land here in a later update._
+- **Thu 2026-07-16** 07:15-10:00 · Dawn patrol - 🟢 GO - 1.5 m NW @ 14 s · 6 km/h offshore
+  - Cleanest of the week: solid NW groundswell square in the works-on window, light offshore. Shifted to the morning push toward mid-incoming tide.
+- **Sat 2026-07-11** 07:00-10:30 · Dawn patrol - 🟢 GO - 1.2 m NW @ 13 s · 8 km/h offshore
+  - Clean NW groundswell in the works-on window, light offshore before the sea breeze fills in. Timed to the incoming tide.
+- **Fri 2026-07-17** 07:30-09:30 · Dawn patrol - 🟡 WORTH A CHECK - 1.1 m NW @ 12 s · 16 km/h cross-shore
+  - Fun size NW in the swell window, but cross-shore builds after mid-morning; go early on the incoming tide.
+- **Wed 2026-07-15** 08:00-10:00 · Morning - 🟡 WORTH A CHECK - 0.8 m NW @ 10 s · 12 km/h cross-shore
+  - Small but in the works-on window on the incoming tide; marginal, dawn only. Wed/Thu W onshore swells dropped as outside the window.
 
 ## Spot info
 
