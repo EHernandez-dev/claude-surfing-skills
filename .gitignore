@@ -28,3 +28,17 @@ __pycache__/
 # Logs
 logs/
 *.log
+
+# Personal surf folder data (the repo root doubles as the surf folder;
+# the commands read/write these, they are per-user, never committed)
+/spots/
+/surfer.yaml
+/reports/
+/forecasts/
+
+# Renderer output that lands in the tools dir when run from the wrong cwd
+skills/spot-researcher/tools/reports/
+
+# Throwaway /prototype outputs
+skills/spot-researcher/tools/prototype-*.html
+skills/spot-researcher/tools/make_prototype_*.py
