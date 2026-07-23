@@ -294,6 +294,7 @@ uv run pytest -v
 
 - `fetch_conditions.py`: 5-15s, five API round-trips (marine, wind/weather, tides, buoy, daylight); NOAA station lists and NDBC's active-stations list are each roughly 1MB, most of the latency is downloading and scanning those
 - `cloudscrape.py`: 1-3s default httpx; 10-30s first `--render` (Chromium install), 3-8s subsequent `--render`
+- `build_package.py`: under 1s, no network (pure payload-to-package transform)
 
 **Timeouts:**
 

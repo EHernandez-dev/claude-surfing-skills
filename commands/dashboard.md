@@ -69,7 +69,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python build_pac
 
 - Omit `--spot-file` when no profile exists (the draft then has no `spot_data` and its verdicts are rating-only).
 - Add `--surfer-file "{abs path to surfer.yaml}"` when it exists (passed through as `surfer_profile`).
-- Add `--target-day YYYY-MM-DD` when the user named a day; the script keys the analysis to it and keeps `conditions.report` consistent.
+- Add `--target-day YYYY-MM-DD` when the user named a day, or when `surfer.yaml`'s `target_days` default selects one inside the forecast window (that default is your call to apply; the script never reads it). The script keys the analysis to it and keeps `conditions.report` consistent.
 
 On success it echoes `{"package_path", "target_day", "verdict"}`. On `{"error", "note"}` (fetch payload unusable, unreadable inputs) there is no HTML to open, so speak: report the error per the failure path above.
 
@@ -87,7 +87,7 @@ Edit `package.json` in place; touch only the judgment layer, the mechanical fiel
 - `analysis.target_day.windows`: adjust `from`/`to`/`label` toward the ideal tide when the profile states one.
 - `spot_data`: reshape the carried prose. From the `notes` in `profile.description`, when stated: `crowd`, `consistency`, `character_notes`, `access` (`{parking, parking_coordinates, transit, entry_exit, facilities, fees}`), `lifeguards` (`{covered, season_hours}`), `rentals` (`[{name, url, offers, price_estimate}]`), `food`, `nearby_spots` (`[{name, note, approx_coordinates}]`) (shapes in SKILL.md Step 3C), then rewrite `description` as a proper sentence or two. Leave `water_quality` out and `community_notes` as `[]` (the dashboard command does no community sweep; the tab renders its explicit checked-and-absent state).
 
-Do not touch `conditions` (the payload stays verbatim; the renderer derives the stable dashboard name `reports/{target-date}-{slug}-dashboard.html` from `report.filenames`).
+Do not edit `conditions`: it is the fetch payload as `build_package.py` wrote it (with `report` kept consistent with the target day); the renderer derives the stable dashboard name `reports/{target-date}-{slug}-dashboard.html` from `report.filenames`.
 
 ## Phase 3: Render and Open
 

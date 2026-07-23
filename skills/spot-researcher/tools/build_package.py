@@ -27,7 +27,7 @@ from typing import Any
 import click
 import yaml
 
-from fetch_conditions import VERDICT_SLUGS, report_filename
+from fetch_conditions import BLOCK_GRID_HOURS, VERDICT_SLUGS, report_filename
 
 # 16-point compass rose, 22.5 degrees apart, N = 0.
 COMPASS_ROSE = [
@@ -82,7 +82,7 @@ def draft_verdict(window: dict[str, Any], works_on: dict[str, Any] | None) -> tu
     rating = window.get("rating")
     verdict = VERDICT_BY_RATING.get(rating)
     if verdict is None:
-        return "skip", ["no quality rating for the day"]
+        return "skip", ["no quality score for the day"]
 
     reasons: list[str] = []
     works_on = works_on or {}
@@ -128,8 +128,8 @@ def swell_string(
     return " ".join(parts) if parts else None
 
 
-# Forecast blocks start on the 3-hour grid build_marine_days emits.
-BLOCK_GRID_HOURS = list(range(5, 22, 3))
+# When a date is missing from the daylight days, assume light until early evening.
+DEFAULT_LAST_LIGHT = "21:00"
 
 
 def window_span(best_time: str, last_light: str) -> tuple[str, str]:
@@ -159,10 +159,12 @@ def window_label(from_time: str) -> str:
 
 
 def _why(window: dict[str, Any], reasons: list[str]) -> str:
+    # "conditions", not "rating": the quality score's rating word is never a
+    # user-facing term (CONTEXT.md), and these strings land on the page.
     rating = window.get("rating")
     parts = []
     if rating in VERDICT_BY_RATING:
-        parts.append(f"{rating} rating at the {window.get('best_time', '?')} block")
+        parts.append(f"{rating} conditions at the {window.get('best_time', '?')} block")
     parts.extend(reasons)
     return "; ".join(parts)
 
@@ -215,7 +217,7 @@ def _build_week(
 def _day_window(
     window: dict[str, Any], last_light_by_date: dict[str, str]
 ) -> dict[str, Any]:
-    last_light = last_light_by_date.get(window["date"], "21:00")
+    last_light = last_light_by_date.get(window["date"], DEFAULT_LAST_LIGHT)
     start, end = window_span(window["best_time"], last_light)
     return {"from": start, "to": end, "label": window_label(start)}
 
@@ -248,26 +250,22 @@ def _build_windows(
     last_light_by_date: dict[str, str],
 ) -> list[dict[str, Any]]:
     """Ranked go/check windows, best score first; skip days rank nothing."""
-    entries = []
+    scored = []
     for row in week_rows:
         window = windows_by_date.get(row["date"])
         if row["verdict"] == "skip" or not window or not window.get("best_time"):
             continue
-        entries.append(
-            {
-                "date": row["date"],
-                "window": _day_window(window, last_light_by_date),
-                "verdict": row["verdict"],
-                "swell": row["swell"],
-                "wind": row["wind"],
-                "why": row["why"],
-                "_score": window.get("score") or 0,
-            }
-        )
-    entries.sort(key=lambda e: -e["_score"])
-    for entry in entries:
-        del entry["_score"]
-    return entries
+        entry = {
+            "date": row["date"],
+            "window": _day_window(window, last_light_by_date),
+            "verdict": row["verdict"],
+            "swell": row["swell"],
+            "wind": row["wind"],
+            "why": row["why"],
+        }
+        scored.append((window.get("score") or 0, entry))
+    scored.sort(key=lambda pair: -pair[0])
+    return [entry for _, entry in scored]
 
 
 # spot profile YAML -> spot_data.profile, per commands/dashboard.md Phase 2.
@@ -364,7 +362,7 @@ def build_package(
         w["date"]: w for w in (payload.get("surf_windows") or []) if w.get("date")
     }
     last_light_by_date = {
-        d["date"]: d.get("last_light", "21:00")
+        d["date"]: d.get("last_light", DEFAULT_LAST_LIGHT)
         for d in (payload.get("daylight") or {}).get("days", [])
         if d.get("date")
     }
@@ -435,8 +433,19 @@ def cli(payload_path: str, spot_file: str | None, surfer_file: str | None, targe
         return
 
     if output:
-        with open(output, "w", encoding="utf-8") as f:
-            json.dump(package, f, indent=2, ensure_ascii=False)
+        try:
+            with open(output, "w", encoding="utf-8") as f:
+                json.dump(package, f, indent=2, ensure_ascii=False)
+        except OSError as e:
+            click.echo(
+                json.dumps(
+                    {
+                        "error": f"could not write the package: {e}",
+                        "note": "check the --output path, or rerun without --output and capture stdout",
+                    }
+                )
+            )
+            return
         click.echo(
             json.dumps(
                 {

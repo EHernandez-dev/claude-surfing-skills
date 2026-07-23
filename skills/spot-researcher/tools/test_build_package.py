@@ -104,7 +104,7 @@ class TestDraftVerdictRatingBands:
     def test_missing_rating_is_skip(self):
         verdict, reasons = draft_verdict(make_window(rating=None), None)
         assert verdict == "skip"
-        assert any("rating" in r for r in reasons)
+        assert any("quality score" in r for r in reasons)
 
     def test_no_works_on_leaves_mapping_alone(self):
         verdict, reasons = draft_verdict(make_window(rating="good", swell_direction="S"), None)
@@ -368,6 +368,11 @@ class TestBuildPackageWeek:
         assert row["wind"] == "12 km/h S (offshore)"
         assert "good" in row["why"]
 
+    def test_why_never_says_rating(self):
+        # "rating" is not a user-facing term (CONTEXT.md, Quality score entry).
+        for row in build_package(make_payload(), PROFILE)["analysis"]["week"]:
+            assert "rating" not in row["why"]
+
     def test_demotion_reason_lands_in_why(self):
         # 2026-07-21: fair rating, W swell inside the arc but 10 s below the 12 s minimum.
         row = build_package(make_payload(), PROFILE)["analysis"]["week"][1]
@@ -583,6 +588,21 @@ class TestCli:
         )
         assert result.exit_code == 1
         assert "error" in json.loads(result.output)
+
+    def test_unwritable_output_is_soft_error(self, tmp_path):
+        payload_path, spot_path = write_inputs(tmp_path)
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--payload", str(payload_path),
+                "--spot-file", str(spot_path),
+                "--output", str(tmp_path / "missing-dir" / "package.json"),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert "error" in data
+        assert "note" in data
 
     def test_error_package_skips_output_file(self, tmp_path):
         payload_path, spot_path = write_inputs(tmp_path, payload=make_payload(windows=None))

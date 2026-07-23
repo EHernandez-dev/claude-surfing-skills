@@ -10,4 +10,4 @@ The dashboard's fast mode renders a draft package with no analyst pass, so its g
 
 ## Consequences
 
-The CONTEXT.md Verdict entry was loosened: spot-corrected when a profile exists, personalized by the surfer profile when present, never presented as the raw quality score alone. Fast-build verdicts for unprofiled spots are rating-only, covered by the existing generic-call disclosure.
+The CONTEXT.md Verdict entry was loosened: spot-corrected when a profile exists, personalized by the surfer profile when present, never presented as the raw quality score alone. Fast-build verdicts for unprofiled spots are rating-only, covered by the existing generic-call disclosure. Fast builds also never consult the surfer profile (the script only passes it through as `surfer_profile`); personalization stays an analyst-pass concern, and the computed-call tag discloses that gap too.

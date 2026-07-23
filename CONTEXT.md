@@ -17,7 +17,7 @@ The render-ready data package assembled mechanically from the fetch payload and 
 _Avoid_: draft report, package draft
 
 **Fast build**:
-A Dashboard rendered straight from the draft package. Its verdicts are true (mechanically spot-corrected) Verdicts, but shallower than an analyst's: the prose works-on fields (size range, tide window, wind preference) are never consulted. Always marked in the hero line as a computed call with no analyst pass.
+A Dashboard rendered straight from the draft package. Its verdicts are true (mechanically spot-corrected) Verdicts, but shallower than an analyst's: the prose works-on fields (size range, tide window, wind preference) and the surfer profile are never consulted. Always marked in the hero line as a computed call with no analyst pass.
 _Avoid_: quick mode, draft dashboard
 
 **Works-on profile**:
