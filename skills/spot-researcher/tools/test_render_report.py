@@ -23,6 +23,7 @@ Regenerate the week-planner golden file after an INTENTIONAL design change with:
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -400,12 +401,13 @@ class TestRenderDashboard:
         assert 'class="strip-bar' in today  # aligned hourly strip
         assert "tide &amp; session windows" in today
 
-    def test_info_panel_is_placeholder(self):
+    def test_info_panel_is_populated(self):
         out = render_dashboard(load_package())
         rest = out[out.index('id="panel-info"'):]
-        assert rest.count('class="placeholder"') == 1  # info only
-        assert "later update" in rest
-        # the populated Today/Forecast tide charts do not leak into the placeholder
+        # the standing-context panel is filled, not a placeholder
+        assert "later update" not in rest
+        assert "Works-on profile" in rest
+        # the populated Today/Forecast/Windows tide charts do not leak into it
         assert 'class="tide-chart"' not in rest
 
     def test_map_hero_and_invalidate_on_today(self):
@@ -577,6 +579,449 @@ class TestWindowsPanel:
         assert "No standout session windows" in win
 
 
+class TestSpotInfoPanel:
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_works_on_profile_rendered(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Works-on profile" in info
+        # the merged works-on fields land in the definition grid
+        assert "Break type" in info and "Rivermouth sandbar left" in info
+        assert "Ideal swell direction" in info and "Ideal tide" in info
+        assert "Mid tide, incoming" in info
+        # the description sits above the grid
+        assert "world-class rivermouth left" in info
+
+    def test_profile_age_and_no_reresearch_when_fresh(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Profile is 4 days old (researched 2026-07-07)." in info
+        # a 4-day-old profile is fresh, so no re-research prompt appears
+        assert "Consider re-researching" not in info
+
+    def test_reresearch_prompt_when_stale(self):
+        pkg = load_package()
+        pkg["conditions"]["spot"]["profile"]["reresearch_suggested"] = True
+        pkg["conditions"]["spot"]["profile"]["age_days"] = 210
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Profile is 210 days old" in info
+        assert "Consider re-researching" in info
+
+    def test_reresearch_prompt_when_age_unknown(self):
+        # A hand-created profile with no research date: age unknown, still prompt.
+        pkg = load_package()
+        pkg["conditions"]["spot"]["profile"]["age_days"] = None
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Profile age is unknown" in info
+        assert "Consider re-researching" in info
+
+    def test_model_bias_surfaced_when_applied(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Model bias applied:" in info
+        assert "corrected from 6 logged sessions" in info
+        assert "6 sessions" in info and "last verified 2026-07-05" in info
+
+    def test_no_bias_note_when_not_applied(self):
+        pkg = load_package()
+        pkg["conditions"].pop("bias", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Model bias applied" not in info
+
+    def test_assigned_buoy_and_water_temperature(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Assigned buoy:" in info
+        assert "Bilbao-Vizcaya (1026)" in info  # station name + id (documented keys)
+        assert "18.4 km away" in info
+        assert 'href="https://portus.puertos.es/"' in info
+        assert "Water temperature:" in info and "21°C" in info
+        assert "buoy observation" in info
+        assert "Wetsuit:" in info
+
+    def test_hazards_and_webcams_rendered(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Hazards" in info and "hazards-list" in info
+        assert "Rivermouth current sweeps hard" in info
+        assert "Webcams" in info and 'class="webcams"' in info
+        assert "Bermeo harbour live view" in info
+        assert "Free" in info and "Paywalled" in info
+
+    def test_community_notes_rendered(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Community notes" in info
+        assert 'class="cn-list"' in info
+        assert "Chest-high and clean on the dawn push" in info
+        assert 'href="https://www.reddit.com/r/surfing/comments/mundaka1"' in info
+        # conditions / crowd / hazards ride along as the note's meta line
+        assert "1.5 m NW @ 13 s, light SE" in info
+        assert "Strong outgoing current near the rivermouth" in info
+
+    def test_community_notes_empty_state(self):
+        pkg = load_package()
+        pkg["spot_data"]["community_notes"] = []
+        info = self._info_slice(render_dashboard(pkg))
+        assert "No recent first-hand reports found" in info
+        assert 'class="cn-list"' not in info  # no list, just the checked-and-absent note
+
+    def test_community_notes_absent_key_treated_as_empty(self):
+        pkg = load_package()
+        pkg["spot_data"].pop("community_notes", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "No recent first-hand reports found" in info
+
+    def test_unprofiled_spot_degrades_without_crashing(self):
+        # No researched spot_data, buoy, water, or bias (an unprofiled run). The
+        # panel still renders: a "no profile yet" note and the notes empty state.
+        # (The full unprofiled banner + stub is a separate slice.)
+        pkg = load_package()
+        pkg["spot_data"] = {"community_notes": []}
+        del pkg["conditions"]["spot"]["profile"]
+        for k in ("buoy", "sea_temperature", "bias"):
+            pkg["conditions"].pop(k, None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "No researched works-on profile yet" in info
+        assert "Buoy &amp; water" not in info  # buoy card omitted when absent
+        assert "No recent first-hand reports found" in info
+
+    def test_hostile_community_note_escaped(self):
+        pkg = load_package()
+        pkg["spot_data"]["community_notes"][0]["summary"] = "<script>alert(1)</script>"
+        out = render_dashboard(pkg)
+        assert "<script>alert(1)</script>" not in out
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in out
+
+
+class TestSpotInfoFactsStrip:
+    """The full-width at-a-glance facts strip above the Spot info dossier."""
+
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_seven_tiles_in_display_order(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        labels = ["Break", "Level", "Water", "Water quality", "UV index", "Lifeguards", "Profile"]
+        positions = [info.index(f'<span class="si-fact-l">{lbl}</span>') for lbl in labels]
+        assert positions == sorted(positions)
+
+    def test_tile_values_from_the_package(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert '<span class="si-fact-v">Rivermouth sandbar left</span>' in info
+        assert '<span class="si-fact-v">21°C</span>' in info
+        assert '<span class="si-fact-v">Yes</span>' in info  # lifeguards covered
+        assert '<span class="si-fact-v">4d old</span>' in info  # profile age
+
+    def test_break_tile_drops_the_parenthetical(self):
+        # The tile is a one-glance value; a "(sand, reef ...)" qualifier from
+        # the profile stays in the works-on grid, not the strip.
+        pkg = load_package()
+        pkg["spot_data"]["profile"]["break_type"] = "Beach break (sand, reef at the flanks)"
+        info = self._info_slice(render_dashboard(pkg))
+        assert '<span class="si-fact-v">Beach break</span>' in info
+
+    def test_level_is_plain_prose_not_a_badge(self):
+        # A coloured single-word level badge was explored and deliberately
+        # dropped; the tile shows the ability_level prose as plain text.
+        info = self._info_slice(render_dashboard(load_package()))
+        assert '<span class="si-fact-v">Advanced</span>' in info
+
+    def test_water_quality_badge_carries_no_date_in_strip(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        strip = info[info.index('class="si-facts"'):info.index("</section>")]
+        assert '<span class="si-wq-badge si-wq-good">Good</span>' in strip
+        assert "checked" not in strip  # the date lives in Buoy & water only
+
+    def test_uv_pill_is_just_the_number_banded_by_who_colour(self):
+        # Fixture target-day UV is 6.9: the high band (6+). The pill carries
+        # only the number; the colour itself is the sunscreen signal.
+        info = self._info_slice(render_dashboard(load_package()))
+        assert '<span class="si-badge si-uv-high">6.9</span>' in info
+        assert "high" not in info[info.index("si-uv-high"):info.index("si-uv-high") + 60].replace("si-uv-high", "")
+
+    def test_uv_bands_medium_and_low(self):
+        pkg = load_package()
+        pkg["conditions"]["weather"]["days"][0]["uv_index_max"] = 4.0
+        info = self._info_slice(render_dashboard(pkg))
+        assert '<span class="si-badge si-uv-med">4</span>' in info
+        pkg["conditions"]["weather"]["days"][0]["uv_index_max"] = 2.1
+        info = self._info_slice(render_dashboard(pkg))
+        assert '<span class="si-badge si-uv-low">2.1</span>' in info
+
+    def test_uv_tile_reads_the_target_day_row(self):
+        # UV is a per-day forecast value; the tile shows the target day's.
+        pkg = load_package()
+        for row in pkg["conditions"]["weather"]["days"]:
+            if row["date"] != "2026-07-11":
+                row["uv_index_max"] = 11.0
+        info = self._info_slice(render_dashboard(pkg))
+        assert '<span class="si-badge si-uv-high">6.9</span>' in info
+        assert ">11<" not in info
+
+    def test_tiles_omitted_when_their_data_is_absent(self):
+        pkg = load_package()
+        pkg["conditions"].pop("weather", None)
+        pkg["spot_data"].pop("lifeguards", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert '<span class="si-fact-l">UV index</span>' not in info
+        assert '<span class="si-fact-l">Lifeguards</span>' not in info
+        assert '<span class="si-fact-l">Break</span>' in info  # the rest remain
+
+
+class TestSpotInfoTheWave:
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_wave_card_carries_prose_and_peaks(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "<h2>The Wave</h2>" in info
+        assert "best lefts: long, fast and hollow" in info  # character_notes prose
+        assert "Peaks along the beach" in info
+        assert "The rivermouth peak" in info and "Inside reform" in info
+        assert '<span class="si-chip">Advanced</span>' in info  # suits chip
+        assert "Works: Mid tide incoming, 1.5-2.5 m NW at 12 s+" in info
+
+    def test_description_moved_out_of_the_works_on_card(self):
+        # The description prose leads The Wave card now, not Works-on profile.
+        info = self._info_slice(render_dashboard(load_package()))
+        assert info.count("world-class rivermouth left") == 1
+        assert info.index("<h2>The Wave</h2>") < info.index("world-class rivermouth left")
+
+    def test_prose_kept_when_peaks_absent(self):
+        pkg = load_package()
+        pkg["spot_data"].pop("peaks", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "<h2>The Wave</h2>" in info
+        assert "Peaks along the beach" not in info
+
+    def test_card_omitted_without_any_wave_data(self):
+        pkg = load_package()
+        pkg["spot_data"].pop("peaks", None)
+        pkg["spot_data"]["profile"].pop("description", None)
+        pkg["spot_data"]["profile"].pop("character_notes", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "<h2>The Wave</h2>" not in info
+
+
+class TestSpotInfoWaterQuality:
+    def _buoy_card(self, out):
+        info = out[out.index('id="panel-info"'):]
+        start = info.index("<h2>Buoy &amp; water</h2>")
+        return info[start:info.index("<section", start)]
+
+    def test_lives_inside_the_buoy_and_water_card(self):
+        card = self._buoy_card(render_dashboard(load_package()))
+        assert "<strong>Water quality:</strong>" in card
+        assert '<span class="si-wq-badge si-wq-good">Good</span>' in card
+        assert "checked 2026-07-09" in card
+        assert "bathing-water rating is excellent" in card
+        assert 'href="https://www.euskadi.eus/bathing-water/mundaka"' in card
+
+    def test_no_standalone_water_quality_card(self):
+        out = render_dashboard(load_package())
+        assert "<h2>Water quality</h2>" not in out
+
+    def test_advisory_renders_the_warn_badge(self):
+        pkg = load_package()
+        pkg["spot_data"]["water_quality"]["advisory"] = True
+        pkg["spot_data"]["water_quality"]["status"] = "Advisory"
+        card = self._buoy_card(render_dashboard(pkg))
+        assert '<span class="si-wq-badge si-wq-warn">Advisory</span>' in card
+
+    def test_absent_water_quality_omits_the_lines(self):
+        pkg = load_package()
+        pkg["spot_data"].pop("water_quality", None)
+        out = render_dashboard(pkg)
+        assert "Water quality:" not in out
+        # the buoy & water card itself survives on buoy + temperature
+        assert "<h2>Buoy &amp; water</h2>" in out
+
+    def test_hostile_summary_escaped(self):
+        pkg = load_package()
+        pkg["spot_data"]["water_quality"]["summary"] = "<script>alert(1)</script>"
+        out = render_dashboard(pkg)
+        assert "<script>alert(1)</script>" not in out
+
+
+class TestSpotInfoAccess:
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_definition_rows_in_order(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "<h2>Access &amp; logistics</h2>" in info
+        terms = ["Parking", "Transit", "Entry / exit", "Facilities", "Fees", "Lifeguards"]
+        positions = [info.index(f'<div class="si-term">{t}</div>') for t in terms]
+        assert positions == sorted(positions)
+        assert "Euskotren Bermeo line" in info
+        assert "Jump off the harbour wall" in info
+        assert "Yes - Summer daytime on Laida beach" in info
+
+    def test_parking_map_link_is_coordinate_based(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "query=43.4079,-2.6989" in info
+
+    def test_parking_map_falls_back_to_a_name_search(self):
+        pkg = load_package()
+        pkg["spot_data"]["access"].pop("parking_coordinates", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "query=Mundaka+parking" in info
+
+    def test_rentals_link_website_and_map(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "Schools &amp; rentals" in info
+        assert 'href="https://www.mundakasurfshop.com/"' in info
+        assert "query=Mundaka+Surf+Shop+Mundaka" in info  # name-search Map link
+        assert "~€25/half-day board" in info
+        # a rental with no website renders as plain text, never href="None"
+        assert "Mur Mur Surf Eskola" in info
+        assert 'href="None"' not in info
+
+    def test_food_listed_with_type_and_note(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "<h4>Food</h4>" in info
+        assert "Harbour bars in Mundaka" in info
+        assert "Post-session pintxos two minutes from the point" in info
+
+    def test_card_omitted_when_all_logistics_absent(self):
+        pkg = load_package()
+        for k in ("access", "lifeguards", "rentals", "food"):
+            pkg["spot_data"].pop(k, None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Access &amp; logistics" not in info
+
+    def test_hostile_rental_name_escaped(self):
+        pkg = load_package()
+        pkg["spot_data"]["rentals"][0]["name"] = "<script>alert(1)</script>"
+        out = render_dashboard(pkg)
+        assert "<script>alert(1)</script>" not in out
+
+
+class TestSpotInfoNearby:
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_nearby_names_and_notes(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "<h2>Nearby alternatives</h2>" in info
+        assert "Laida" in info and "Bakio" in info
+        assert "mellow banks when Mundaka is too heavy" in info
+
+    def test_map_link_prefers_approx_coordinates(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "query=43.4098,-2.6777" in info  # Laida's approx_coordinates
+
+    def test_map_link_falls_back_to_a_name_search(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "query=Bakio+Mundaka" in info  # Bakio has no coordinates
+
+    def test_card_omitted_when_absent(self):
+        pkg = load_package()
+        pkg["spot_data"].pop("nearby_spots", None)
+        info = self._info_slice(render_dashboard(pkg))
+        assert "Nearby alternatives" not in info
+
+
+class TestSpotInfoLocationAndLayout:
+    def _info_slice(self, out):
+        return out[out.index('id="panel-info"'):]
+
+    def test_two_column_dossier_with_a_sticky_rail(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert 'class="si-dossier"' in info
+        assert 'class="si-read"' in info
+        assert 'class="si-rail"' in info
+
+    def test_left_cards_in_locked_order(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        heads = ["<h2>Works-on profile</h2>", "<h2>The Wave</h2>", "<h2>Hazards</h2>",
+                 "<h2>Buoy &amp; water</h2>", "<h2>Access &amp; logistics</h2>",
+                 "<h2>Nearby alternatives</h2>", "<h2>Community notes</h2>"]
+        positions = [info.index(h) for h in heads]
+        assert positions == sorted(positions)
+
+    def test_rail_holds_location_then_webcams(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        rail = info[info.index('class="si-rail"'):]
+        assert rail.index(">Location</a></h2>") < rail.index("<h2>Webcams</h2>")
+
+    def test_location_heading_links_to_google_maps_with_coords(self):
+        info = self._info_slice(render_dashboard(load_package()))
+        assert "query=43.407,-2.699" in info
+        assert "<strong>Coordinates:</strong> 43.407, -2.699" in info
+
+    def test_location_map_div_and_init_present(self):
+        out = render_dashboard(load_package())
+        assert 'id="info-map"' in out
+        assert "window.__infoMap" in out
+
+    def test_toggle_invalidates_the_info_map_on_tab_show(self):
+        # The Location map lives in a hidden tab; its size must be re-measured
+        # when the info panel becomes visible or its tiles render greyed.
+        out = render_dashboard(load_package())
+        assert "__infoMap.invalidateSize" in out
+
+    def test_no_coordinates_omits_location_but_keeps_webcams(self):
+        pkg = load_package()
+        pkg["conditions"]["spot"].pop("coordinates", None)
+        out = render_dashboard(pkg)
+        info = self._info_slice(out)
+        assert 'id="info-map"' not in info
+        assert "L.map('info-map'" not in out  # no init for a missing card
+        assert "<h2>Webcams</h2>" in info
+
+
+class TestSpotInfoMarkdownExpanded:
+    def _info(self, pkg=None):
+        md = render_dashboard_markdown(pkg or load_package())
+        return md[md.index("## Spot info"):]
+
+    def test_flat_sections_in_locked_order(self):
+        info = self._info()
+        heads = ["### Works-on profile", "### The Wave", "### Hazards", "### Buoy & water",
+                 "### Access & logistics", "### Nearby alternatives", "### Community notes",
+                 "### Location", "### Webcams"]
+        positions = [info.index(h) for h in heads]
+        assert positions == sorted(positions)
+
+    def test_facts_lines_lead_the_section(self):
+        info = self._info()
+        assert "- **Break:** Rivermouth sandbar left" in info
+        assert "- **Level:** Advanced" in info
+        assert "- **Water:** 21°C" in info
+        assert "- **Water quality:** Good" in info
+        assert "- **UV index:** 6.9" in info
+        assert "- **Lifeguards:** Yes" in info
+        assert "- **Profile:** 4d old" in info
+        # the facts precede the first subsection
+        assert info.index("- **Break:**") < info.index("### Works-on profile")
+
+    def test_wave_section_lists_peaks(self):
+        info = self._info()
+        assert "**The rivermouth peak** (Advanced)" in info
+        assert "Works: Mid tide incoming, 1.5-2.5 m NW at 12 s+" in info
+
+    def test_water_quality_inside_buoy_and_water(self):
+        info = self._info()
+        section = info[info.index("### Buoy & water"):info.index("### Access")]
+        assert "- **Water quality:** Good (checked 2026-07-09)" in section
+        assert "[source](https://www.euskadi.eus/bathing-water/mundaka)" in section
+
+    def test_access_lines_carry_markdown_map_links(self):
+        info = self._info()
+        assert "[Map](https://www.google.com/maps/search/?api=1&query=43.4079,-2.6989)" in info
+        assert "[Mundaka Surf Shop](https://www.mundakasurfshop.com/)" in info
+        assert "**Schools & rentals:**" in info and "**Food:**" in info
+
+    def test_nearby_lines_carry_map_links(self):
+        info = self._info()
+        assert "[Map](https://www.google.com/maps/search/?api=1&query=43.4098,-2.6777)" in info
+        assert "[Map](https://www.google.com/maps/search/?api=1&query=Bakio+Mundaka)" in info
+
+    def test_location_is_a_link_plus_coordinates_no_embedded_map(self):
+        info = self._info()
+        assert "[Google Maps](https://www.google.com/maps/search/?api=1&query=43.407,-2.699)" in info
+        assert "Coordinates: 43.407, -2.699" in info
+        assert "info-map" not in info
+
+
 class TestWeekTideSvg:
     """Focused 7-day tide-geometry tests (like the single-day _x_at tests)."""
 
@@ -726,12 +1171,21 @@ class TestSelfContainment:
         # Strip the inlined vendor blocks first: Leaflet's own source carries
         # http strings (the SVG namespace, its banner, CSS bug-tracker
         # comments) that are not resource loads. What matters is that OUR
-        # emitted markup adds no remote reference except the OSM tile template.
+        # emitted markup loads no remote resource except the OSM tile template.
+        # The Spot info panel's external <a href> links (webcams, buoy,
+        # community sources) are navigations, not loads, so they are allowed;
+        # strip them before counting so only true resource references remain.
         out = render_dashboard(load_package())
         ours = out.replace(render_report._read_vendor("leaflet.css"), "")
         ours = ours.replace(render_report._read_vendor("leaflet.js"), "")
-        assert ours.count("http") == 1
         assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" in ours
+        assert 'src="http' not in ours  # no remote scripts/images
+        assert "url(http" not in ours  # no remote CSS resources
+        non_anchor = re.sub(r'href="[^"]*"', "", ours)
+        # Two map inits (the Today hero and the Spot info Location map), each
+        # carrying only the OSM tile template; nothing else remote remains.
+        tile = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        assert non_anchor.count("http") == non_anchor.count(tile) == 2
 
     def test_leaflet_inlined(self):
         out = render_dashboard(load_package())
@@ -824,9 +1278,18 @@ class TestDashboardMarkdown:
         assert "1.2 m NW @ 13 s" in windows  # swell detail
         assert "works-on window" in windows  # reasoning shown
 
-    def test_info_section_is_placeholder(self):
+    def test_info_section_is_populated(self):
         md = render_dashboard_markdown(load_package())
-        assert md.count("later update") == 1  # info only
+        info = md[md.index("## Spot info"):]
+        assert "later update" not in md
+        assert "### Works-on profile" in info
+        assert "**Break type:** Rivermouth sandbar left" in info
+        assert "Profile is 4 days old (researched 2026-07-07)." in info
+        assert "**Model bias applied:**" in info
+        assert "### Buoy & water" in info
+        assert "[Bilbao-Vizcaya (1026)](https://portus.puertos.es/)" in info
+        assert "### Community notes" in info
+        assert "[2026-06-28](https://www.reddit.com/r/surfing/comments/mundaka1)" in info
 
     def test_empty_windows_section_reads_as_checked_and_absent(self):
         pkg = load_package()

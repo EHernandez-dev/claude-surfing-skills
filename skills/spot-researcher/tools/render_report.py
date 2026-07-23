@@ -14,8 +14,12 @@ verdict chip and the Python-generated tide curve with the aligned hourly strip,
 both clipped to the target day's daylight. The Forecast panel is interactive: a
 Week-at-a-glance 7-day tide overview (each day clipped to its own daylight
 window, with the mid-tide two-tone split) above a By-day list of day-selector
-rows whose click swaps in that day's full Today-style chart. Windows / Spot info
-are placeholders filled by later slices.
+rows whose click swaps in that day's full Today-style chart. The Windows panel
+lists the week's ranked session windows; the Spot info panel carries the spot's
+standing context as an at-a-glance facts strip above a two-column dossier
+(works-on profile, The Wave with its named peaks, hazards, buoy & water with
+water quality, access & logistics, nearby alternatives, community notes, plus a
+Location map and the webcams in a sticky rail).
 
 `--mode week` renders the separate multi-spot Week planner (unchanged).
 
@@ -41,6 +45,7 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
 
 import click
 
@@ -1013,6 +1018,75 @@ DASHBOARD_CSS = """
   .fc-crow { flex-wrap: wrap; }
   .fc-crow .sw, .fc-crow .desc { width: auto; flex-basis: 100%; }
 }
+/* Spot info: the works-on definition grid, profile-freshness / bias notes, the
+   buoy & water lines, and the community-notes list. Reuses the shared card,
+   hazards-card, and webcams styles above. */
+.si-desc { margin: 0 0 14px; }
+.si-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; }
+.si-term { color: var(--muted); font-weight: 600; }
+.si-def { color: var(--ink); }
+.si-reresearch {
+  margin: 14px 0 0; padding: 8px 12px; font-size: 0.9rem; border-radius: 10px;
+  color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-border);
+}
+.si-bias { margin: 14px 0 0; color: var(--muted); font-size: 0.9rem; }
+.si-buoy, .si-water, .si-wetsuit { margin: 6px 0; }
+.si-muted { color: var(--muted); font-weight: 400; }
+.si-buoy a, .cn-date a { color: var(--accent); text-decoration: none; }
+.si-buoy a:hover, .cn-date a:hover { text-decoration: underline; }
+.cn-list { list-style: none; padding: 0; margin: 4px 0 0; }
+.cn-item { padding: 10px 0; border-top: 1px solid var(--border); }
+.cn-item:first-child { border-top: none; }
+.cn-date { font-weight: 700; }
+.cn-meta { display: block; color: var(--muted); font-size: 0.88rem; margin-top: 3px; }
+@media (max-width: 600px) {
+  .si-dl { grid-template-columns: 1fr; gap: 2px 0; }
+  .si-dl .si-def { margin-bottom: 8px; }
+}
+/* Expanded Spot info: the at-a-glance facts strip, the two-column dossier (a
+   read column beside a sticky reference rail), The Wave's peaks list, the
+   water-quality and UV badges, the logistics lists, and the Location map.
+   Card-element rules are scoped to #panel-info so the other panels' cards
+   keep their own typography. */
+#panel-info .card h4 { margin: 16px 0 6px; font-size: 0.95rem; }
+.si-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.si-fact { display: flex; flex-direction: column; gap: 2px; }
+.si-fact-l { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.si-fact-v { font-weight: 700; }
+/* margin-top keeps a clear gap under the facts strip; the first card in each
+   column zeroes its own top margin so both columns line up. */
+.si-dossier { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; margin-top: 24px; }
+.si-rail { position: sticky; top: 72px; }
+.si-read > .card:first-child, .si-rail > .card:first-child { margin-top: 0; }
+.si-peaks { list-style: none; padding: 0; margin: 6px 0 0; }
+.si-peaks > li { padding: 10px 0; border-top: 1px solid var(--border); display: grid; gap: 2px; }
+.si-peaks > li:first-child { border-top: none; }
+.si-peak-name { font-weight: 700; }
+.si-peak-char { color: var(--ink); }
+.si-peak-when { color: var(--muted); font-size: 0.9rem; }
+.si-chip { justify-self: start; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.si-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+.si-list { margin: 6px 0 0; padding-left: 18px; }
+.si-list li { padding: 3px 0; }
+/* badges are centered pills; the colour itself is the signal (water quality
+   status, UV band: green under 3, amber 3-6, red 6+ per the WHO bands) */
+.si-badge, .si-wq-badge { display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  font-weight: 700; font-size: 0.78rem; padding: 3px 12px; border-radius: 999px; color: #fff; }
+.si-badge { min-width: 34px; }
+.si-wq-good { background: var(--go); } .si-wq-warn { background: var(--skip); }
+.si-uv-low { background: var(--go); } .si-uv-med { background: var(--check); } .si-uv-high { background: var(--skip); }
+.si-map { height: 220px; border-radius: 12px; overflow: hidden; margin-top: 4px; background: #cfd8e0; }
+.si-map .leaflet-container { height: 100%; }
+#panel-info .card h2 a { color: inherit; text-decoration: none; }
+#panel-info .card h2 a:hover { color: var(--accent); text-decoration: underline; }
+.si-def a, .si-list a, .si-peak-name a, .si-water a, .si-muted a { color: var(--accent); text-decoration: none; }
+.si-def a:hover, .si-list a:hover, .si-peak-name a:hover, .si-water a:hover, .si-muted a:hover { text-decoration: underline; }
+@media (max-width: 900px) {
+  .si-dossier { grid-template-columns: 1fr; }
+  .si-rail { position: static; }
+  .si-two { grid-template-columns: 1fr; }
+}
 """
 
 # The map init is a few inline lines. Literal {z}/{x}/{y} in the tile template
@@ -1029,6 +1103,24 @@ MAP_JS = """(function () {
     radius: 9, weight: 2, color: '#ffffff', fillColor: '#2b7cd3', fillOpacity: 0.9
   }).addTo(map);
   window.__surfMap = map;
+})();"""
+
+# Spot info Location map: same tiles/marker as the Today hero, zoomed out to
+# the surrounding coast. The panel is a hidden tab until selected, so the map
+# is exposed as window.__infoMap and TOGGLE_JS re-measures it when the info
+# tab becomes visible (a map drawn while hidden otherwise renders greyed or
+# mis-sized tiles). Same sentinel splice as MAP_JS so {z}/{x}/{y} survives.
+INFO_MAP_JS = """(function () {
+  var lat = __ILAT__, lon = __ILON__;
+  var map = L.map('info-map', { scrollWheelZoom: false }).setView([lat, lon], 12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '\\u00a9 OpenStreetMap'
+  }).addTo(map);
+  L.circleMarker([lat, lon], {
+    radius: 9, weight: 2, color: '#ffffff', fillColor: '#2b7cd3', fillOpacity: 0.9
+  }).addTo(map);
+  window.__infoMap = map;
 })();"""
 
 # Week map: one marker per spot with a name + best-verdict popup, auto-fit to
@@ -1058,9 +1150,9 @@ WEEK_MAP_JS = """(function () {
 
 # Panel toggle: all four panels are in the DOM; clicking a tab (or arriving with
 # a #today/#forecast/#windows/#info fragment) shows one and hides the rest. No
-# data is fetched on click. When the Today panel becomes visible its Leaflet map
-# is re-measured, so a dashboard opened straight onto another tab still draws the
-# map correctly once Today is selected.
+# data is fetched on click. When the Today or Spot info panel becomes visible
+# its Leaflet map is re-measured, so a dashboard opened straight onto another
+# tab still draws each map correctly once its panel is selected.
 TOGGLE_JS = """(function () {
   var panels = ['today', 'forecast', 'windows', 'info'];
   function show(name) {
@@ -1072,6 +1164,7 @@ TOGGLE_JS = """(function () {
       if (tab) { tab.setAttribute('aria-selected', p === name ? 'true' : 'false'); }
     });
     if (name === 'today' && window.__surfMap) { window.__surfMap.invalidateSize(); }
+    if (name === 'info' && window.__infoMap) { window.__infoMap.invalidateSize(); }
   }
   function fromHash() {
     show((window.location.hash || '').replace('#', '') || 'today');
@@ -1171,15 +1264,31 @@ DASHBOARD_TABS = [
     ("info", "Spot info"),
 ]
 
-# Placeholder copy for the panels this slice does not yet populate; later slices
-# replace each body. Today, Forecast and Windows are populated; Spot info is
-# still a placeholder. Kept in sync with the Markdown twin's placeholders.
-PANEL_PLACEHOLDERS = {
-    "info": (
-        "Spot info",
-        "The works-on profile, hazards, webcams, and community notes land here in a later update.",
-    ),
-}
+# The works-on profile fields shown in the Spot info panel, in display order,
+# each paired with its human label. `description` is drawn separately as an
+# intro paragraph; only fields present in the merged profile are rendered.
+WORKS_ON_FIELDS = [
+    ("break_type", "Break type"),
+    ("bottom", "Bottom"),
+    ("wave_direction", "Wave direction"),
+    ("ideal_swell_direction", "Ideal swell direction"),
+    ("ideal_swell_size", "Ideal swell size"),
+    ("ideal_period_s", "Ideal period"),
+    ("ideal_wind", "Ideal wind"),
+    ("ideal_tide", "Ideal tide"),
+    ("best_season", "Best season"),
+    ("ability_level", "Ability level"),
+    ("crowd", "Crowd"),
+    ("consistency", "Consistency"),
+]
+
+# The explicit checked-and-absent state for community notes: an empty section
+# reads as "we looked and found nothing dated", never as broken. Shared verbatim
+# by the HTML panel and the Markdown twin.
+NO_COMMUNITY_NOTES = (
+    "No recent first-hand reports found. Checked the surf communities; nothing "
+    "dated turned up, so this reads as checked-and-absent, not missing."
+)
 
 
 def _swell_wind(entry: dict[str, Any]) -> str:
@@ -1574,18 +1683,531 @@ def _windows_panel_html(view: dict[str, Any]) -> str:
     )
 
 
+# Small pure shapers shared by the Spot info HTML panel and its Markdown twin,
+# so the two never drift on a copied formatting rule. Each returns display text
+# (or a list of meta bits) the caller escapes/wraps for its own medium. Only
+# documented `conditions.buoy.station` keys (id, name, distance_km, url) are read
+# - `network` is not part of that payload contract, so it is never surfaced.
+
+
+def _buoy_label(station: dict[str, Any]) -> str:
+    """The assigned buoy's display name: its name plus station id when present."""
+    label = str(station.get("name") or "Nearest buoy")
+    if station.get("id"):
+        label += f" ({station['id']})"
+    return label
+
+
+def _buoy_meta_bits(station: dict[str, Any]) -> list[str]:
+    """Muted meta for the assigned buoy: its distance from the spot when known."""
+    if station.get("distance_km") is not None:
+        return [f"{_fmt_label(station['distance_km'])} km away"]
+    return []
+
+
+def _bias_meta_bits(bias: dict[str, Any]) -> list[str]:
+    """Muted meta for the applied model bias: sample count and last-verified date."""
+    bits = []
+    samples = bias.get("samples")
+    if samples is not None:
+        bits.append(f"{samples} session{'' if samples == 1 else 's'}")
+    if bias.get("last_verified"):
+        bits.append(f"last verified {bias['last_verified']}")
+    return bits
+
+
+def _note_meta_bits(note: dict[str, Any]) -> list[str]:
+    """A community note's ride-along meta: its conditions, crowd, and hazards."""
+    return [str(note[k]) for k in ("conditions", "crowd", "hazards") if note.get(k)]
+
+
+def _gmaps_coords_url(lat: Any, lon: Any) -> str:
+    """A coordinate-based Google Maps link (used for the spot and its parking)."""
+    return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+
+
+def _gmaps_search_url(query: str) -> str:
+    """A name-search Google Maps link (used for rentals and nearby spots)."""
+    return f"https://www.google.com/maps/search/?api=1&query={quote_plus(query)}"
+
+
+def _parse_coords(value: Any) -> tuple[float, float] | None:
+    """A (lat, lon) float pair from a `[lat, lon]` list or a `"lat,lon"` string.
+
+    The research agents record `approx_coordinates` as a "lat,lon" string (or
+    null); coordinates elsewhere in the payload are two-element lists. Returns
+    None for anything that does not parse to two numbers.
+    """
+    if isinstance(value, str):
+        value = value.split(",")
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    try:
+        return float(value[0]), float(value[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _place_maps_url(name: str, spot_name: str, approx_coordinates: Any = None) -> str:
+    """The "Map" link for a named place (a rental, a nearby spot): its recorded
+    coordinates when they parse, otherwise a name search anchored by the spot's
+    name so a generic place name still lands in the right area."""
+    coords = _parse_coords(approx_coordinates)
+    return _gmaps_coords_url(*coords) if coords else _gmaps_search_url(f"{name} {spot_name}")
+
+
+def _uv_badge(uv: float) -> str:
+    """The UV pill: just the number, colour-banded per WHO (the colour is the
+    sunscreen signal - green under 3, amber 3-6, red 6 and above)."""
+    cls = "si-uv-low" if uv < 3 else "si-uv-med" if uv < 6 else "si-uv-high"
+    return f'<span class="si-badge {cls}">{_fmt_label(uv)}</span>'
+
+
+def _wq_badge(wq: dict[str, Any]) -> str:
+    """The water-quality status badge (no date; green unless an advisory is on)."""
+    cls = "si-wq-warn" if wq.get("advisory") else "si-wq-good"
+    return f'<span class="si-wq-badge {cls}">{html.escape(str(wq.get("status", "Unknown")))}</span>'
+
+
+def _spot_info_facts(view: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """The at-a-glance facts, shared by the HTML strip and the Markdown lines.
+
+    (label, kind, text) triples in the locked tile order: Break · Level ·
+    Water · Water quality · UV index · Lifeguards · Profile. `kind` marks the
+    two values the HTML strip renders as coloured badges ("wq" / "uv"; "text"
+    otherwise); the Markdown twin uses `text` as-is. A fact is present only
+    when its datum is. The break type drops any parenthetical qualifier so the
+    tile stays one-glance short; Level stays plain prose (a coloured level
+    badge was explored and deliberately dropped).
+    """
+    profile = view["profile"]
+    facts: list[tuple[str, str, str]] = []
+    if profile.get("break_type"):
+        facts.append(("Break", "text", str(profile["break_type"]).split("(")[0].strip()))
+    if profile.get("ability_level"):
+        facts.append(("Level", "text", str(profile["ability_level"])))
+    temp = view["sea_temperature"].get("current")
+    if temp is not None:
+        facts.append(("Water", "text", f"{_fmt_label(temp)}{view['temp_unit']}"))
+    if view["water_quality"]:
+        facts.append(("Water quality", "wq", str(view["water_quality"].get("status", "Unknown"))))
+    if view["uv_index_max"] is not None:
+        facts.append(("UV index", "uv", _fmt_label(view["uv_index_max"])))
+    if view["lifeguards"].get("covered"):
+        facts.append(("Lifeguards", "text", str(view["lifeguards"]["covered"]).capitalize()))
+    age = view["profile_meta"].get("age_days")
+    if age is not None:
+        facts.append(("Profile", "text", f"{age}d old"))
+    return facts
+
+
+def _access_rows(view: dict[str, Any]) -> list[tuple[str, str, str | None]]:
+    """The Access & logistics definition rows, shared by both twins.
+
+    (label, text, maps_url) triples in display order. `maps_url` carries the
+    Parking row's "Map" link (the recorded lot coordinates when present, a
+    "<spot> parking" name search otherwise) and is None elsewhere. Lifeguards
+    joins coverage and season/hours into one line.
+    """
+    access, lifeguards = view["access"], view["lifeguards"]
+    rows: list[tuple[str, str, str | None]] = []
+    if access.get("parking"):
+        pcoords = _parse_coords(access.get("parking_coordinates"))
+        url = _gmaps_coords_url(*pcoords) if pcoords else _gmaps_search_url(f"{view['spot_name']} parking")
+        rows.append(("Parking", str(access["parking"]), url))
+    for key, label in (("transit", "Transit"), ("entry_exit", "Entry / exit"),
+                       ("facilities", "Facilities"), ("fees", "Fees")):
+        if access.get(key):
+            rows.append((label, str(access[key]), None))
+    if lifeguards.get("covered"):
+        lg = str(lifeguards["covered"]).capitalize()
+        if lifeguards.get("season_hours"):
+            lg += f" - {lifeguards['season_hours']}"
+        rows.append(("Lifeguards", lg, None))
+    return rows
+
+
+def _spot_info_view(package: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the spot's standing context shared by the HTML and Markdown twins.
+
+    Pulls the works-on profile, The Wave's peaks, hazards, water quality,
+    access & logistics (with lifeguards, rentals and food), nearby alternatives,
+    webcams and community notes from `spot_data`, and the assigned buoy, water
+    temperature, profile-freshness metadata, applied model bias, spot identity
+    (name + coordinates, for the Location card and the Google Maps links) and
+    the target day's UV index from `conditions`, so the Spot info panel and its
+    flat twin never drift. UV is the one forecast value on the tab: it reads
+    the target day's `weather.days[]` row, standing in for "today's sun" at a
+    glance. Every piece is optional: a missing key resolves to an empty value
+    the panel renders as absent (community notes to their explicit
+    checked-and-absent state). Reads only existing payload; no
+    `fetch_conditions.py` change is required.
+    """
+    conditions = package.get("conditions", {})
+    spot_data = package.get("spot_data") or {}
+    units = conditions.get("units", {})
+    spot = conditions.get("spot") or {}
+
+    coords = _parse_coords(spot.get("coordinates"))
+
+    target_date = (package.get("analysis", {}).get("target_day") or {}).get("date") \
+        or conditions.get("report", {}).get("target_date")
+    uv = None
+    for row in (conditions.get("weather") or {}).get("days") or []:
+        if row.get("date") == target_date:
+            uv = row.get("uv_index_max")
+            break
+
+    return {
+        "profile": spot_data.get("profile") or {},
+        "peaks": [p for p in (spot_data.get("peaks") or []) if p],
+        "hazards": [h for h in (spot_data.get("hazards") or []) if h],
+        "water_quality": spot_data.get("water_quality") or {},
+        "access": spot_data.get("access") or {},
+        "lifeguards": spot_data.get("lifeguards") or {},
+        "rentals": [r for r in (spot_data.get("rentals") or []) if r],
+        "food": [f for f in (spot_data.get("food") or []) if f],
+        "nearby_spots": [s for s in (spot_data.get("nearby_spots") or []) if s],
+        "webcams": spot_data.get("webcams") or [],
+        "community_notes": spot_data.get("community_notes") or [],
+        "buoy": conditions.get("buoy") or {},
+        "sea_temperature": conditions.get("sea_temperature") or {},
+        "profile_meta": spot.get("profile") or {},
+        "bias": conditions.get("bias") or {},
+        "spot_name": spot.get("name", "This spot"),
+        "coordinates": coords,
+        "uv_index_max": uv if isinstance(uv, (int, float)) and not isinstance(uv, bool) else None,
+        "temp_unit": units.get("temperature", "°C"),
+        "wave_unit": units.get("wave_height", "m"),
+    }
+
+
+def _profile_freshness(meta: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(age line, re-research suggestion) for the profile-freshness note.
+
+    The age line states how old the profile is (or that its age is unknown for a
+    hand-created profile with no research date). The suggestion appears when the
+    payload flags re-research (past ~6 months) OR when the age is unknown, so a
+    stale or undated profile always prompts a refresh. Returns (None, None) when
+    no profile metadata is present (an unprofiled conditions-only run).
+    """
+    if not meta:
+        return None, None
+    age = meta.get("age_days")
+    if age is not None:
+        line = f"Profile is {age} day{'' if age == 1 else 's'} old"
+        last = meta.get("last_researched")
+        line += f" (researched {last})." if last else "."
+    else:
+        line = "Profile age is unknown (hand-created; no research date on file)."
+    suggest = None
+    if meta.get("reresearch_suggested") or age is None:
+        suggest = "Consider re-researching this spot to refresh its profile."
+    return line, suggest
+
+
+def _bias_note_html(bias: dict[str, Any]) -> str | None:
+    """The applied-model-bias note for the Spot info panel, or None when absent.
+
+    Surfaces the correction's `note` (so the bias is never silent) plus a small
+    muted meta of sample count and last-verified date. Renders nothing unless a
+    bias was actually applied.
+    """
+    if not bias or not bias.get("applied"):
+        return None
+    esc = html.escape
+    note = bias.get("note")
+    text = esc(str(note)) if note else "A per-spot model correction is applied to the forecast."
+    meta_bits = _bias_meta_bits(bias)
+    meta = f' <span class="si-muted">({esc(", ".join(meta_bits))})</span>' if meta_bits else ""
+    return f"<strong>Model bias applied:</strong> {text}{meta}"
+
+
+def _facts_strip_html(view: dict[str, Any]) -> str:
+    """The full-width at-a-glance facts strip above the Spot info dossier.
+
+    Renders the shared `_spot_info_facts` triples as tiles: water quality as
+    its status badge with no date (the date lives in Buoy & water), UV as just
+    the number in its WHO-banded pill, everything else as plain text. With no
+    facts at all the strip is omitted entirely.
+    """
+    esc = html.escape
+    tiles = []
+    for label, kind, text in _spot_info_facts(view):
+        if kind == "wq":
+            value = _wq_badge(view["water_quality"])
+        elif kind == "uv":
+            value = _uv_badge(view["uv_index_max"])
+        else:
+            value = esc(text)
+        tiles.append(
+            f'<div class="si-fact"><span class="si-fact-l">{esc(label)}</span>'
+            f'<span class="si-fact-v">{value}</span></div>'
+        )
+    if not tiles:
+        return ""
+    return f'<section class="card"><div class="si-facts">{"".join(tiles)}</div></section>'
+
+
+def _spot_info_panel_html(view: dict[str, Any]) -> tuple[str, str]:
+    """Build the Spot info panel: the spot's standing, non-time-sensitive context.
+
+    The composed dossier layout: the facts strip up top (see
+    `_facts_strip_html`), then two columns. The left "read" column stacks the
+    works-on profile (with the profile-freshness note, a re-research suggestion
+    when stale/undated, and the applied model bias), The Wave (description +
+    character prose and the named peaks), the hazards, buoy & water (water
+    quality lives inside this card, never standalone), access & logistics
+    (parking through fees, lifeguards, schools & rentals, food), the nearby
+    alternatives, and the community notes. The sticky right rail holds the
+    Location card (a Leaflet map, its heading linking out to Google Maps) and
+    the webcams. Off-site Google Maps links are all labelled "Map":
+    coordinate-based for the spot and its parking, name searches for rentals
+    and nearby spots (which prefer `approx_coordinates` when recorded).
+
+    Community notes always render, falling back to their explicit "no recent
+    first-hand reports found" state so an empty section reads as
+    checked-and-absent, never broken. Every other card is drawn only when its
+    data is present. Returns (panel_html, info_map_js); the map JS is empty
+    when the spot has no coordinates (no Location card then).
+    """
+    esc = html.escape
+    spot_name = str(view["spot_name"])
+    cards: list[str] = []
+
+    # --- Works-on profile (+ freshness note, re-research prompt, model bias) --
+    profile = view["profile"]
+    age_line, reresearch = _profile_freshness(view["profile_meta"])
+    sub = f'<p class="sub">{esc(age_line)}</p>' if age_line else ""
+
+    body_bits: list[str] = []
+    rows = [
+        f'<div class="si-term">{esc(label)}</div><div class="si-def">{esc(str(profile[key]))}</div>'
+        for key, label in WORKS_ON_FIELDS
+        if profile.get(key)
+    ]
+    if rows:
+        body_bits.append(f'<dl class="si-dl">{"".join(rows)}</dl>')
+    else:
+        body_bits.append(
+            '<p class="placeholder">No researched works-on profile yet. '
+            "Run /surfing:research to build one for this spot.</p>"
+        )
+    if reresearch:
+        body_bits.append(f'<p class="si-reresearch">{esc(reresearch)}</p>')
+    bias_note = _bias_note_html(view["bias"])
+    if bias_note:
+        body_bits.append(f'<p class="si-bias">{bias_note}</p>')
+    cards.append(
+        f'<section class="card"><h2>Works-on profile</h2>{sub}{"".join(body_bits)}</section>'
+    )
+
+    # --- The Wave: description + character prose, then the named peaks -------
+    wave_bits: list[str] = []
+    if profile.get("description"):
+        wave_bits.append(f'<p class="si-desc">{esc(str(profile["description"]))}</p>')
+    if profile.get("character_notes"):
+        wave_bits.append(f'<p class="si-desc">{esc(str(profile["character_notes"]))}</p>')
+    if view["peaks"]:
+        peak_rows = []
+        for pk in view["peaks"]:
+            bits = []
+            if pk.get("name"):
+                bits.append(f'<span class="si-peak-name">{esc(str(pk["name"]))}</span>')
+            if pk.get("suits"):
+                bits.append(f'<span class="si-chip">{esc(str(pk["suits"]))}</span>')
+            if pk.get("character"):
+                bits.append(f'<span class="si-peak-char">{esc(str(pk["character"]))}</span>')
+            if pk.get("works_best"):
+                bits.append(f'<span class="si-peak-when">Works: {esc(str(pk["works_best"]))}</span>')
+            peak_rows.append(f'<li>{"".join(bits)}</li>')
+        wave_bits.append("<h4>Peaks along the beach</h4>")
+        wave_bits.append(f'<ul class="si-peaks">{"".join(peak_rows)}</ul>')
+    if wave_bits:
+        cards.append(f'<section class="card"><h2>The Wave</h2>{"".join(wave_bits)}</section>')
+
+    # --- Hazards (reuses the warn-tinted hazards card) -----------------------
+    if view["hazards"]:
+        items = "".join(f"<li>{esc(str(h))}</li>" for h in view["hazards"])
+        cards.append(
+            '<section class="card hazards-card"><h2>Hazards</h2>'
+            f'<ul class="hazards-list">{items}</ul></section>'
+        )
+
+    # --- Buoy, water temperature + water quality -----------------------------
+    buoy, sea, wq = view["buoy"], view["sea_temperature"], view["water_quality"]
+    if buoy or sea or wq:
+        bits: list[str] = []
+        station = buoy.get("station") or {}
+        if station:
+            label = esc(_buoy_label(station))
+            url = station.get("url")
+            link = f'<a href="{esc(str(url))}">{label}</a>' if url else label
+            meta_bits = _buoy_meta_bits(station)
+            meta = f" · {esc(' · '.join(meta_bits))}" if meta_bits else ""
+            bits.append(f'<p class="si-buoy"><strong>Assigned buoy:</strong> {link}{meta}</p>')
+        else:
+            note = buoy.get("note")
+            note_html = f' <span class="si-muted">{esc(str(note))}</span>' if note else ""
+            bits.append(f'<p class="placeholder">No buoy is assigned to this spot.{note_html}</p>')
+        temp = sea.get("current")
+        if temp is not None:
+            line = f"<strong>Water temperature:</strong> {esc(_fmt_label(temp))}{esc(view['temp_unit'])}"
+            if sea.get("source"):
+                line += f' <span class="si-muted">({esc(str(sea["source"]))})</span>'
+            bits.append(f'<p class="si-water">{line}</p>')
+            if sea.get("wetsuit"):
+                bits.append(f'<p class="si-wetsuit"><strong>Wetsuit:</strong> {esc(str(sea["wetsuit"]))}</p>')
+        if wq:
+            dated = f'<span class="si-muted"> · checked {esc(str(wq["dated"]))}</span>' if wq.get("dated") else ""
+            bits.append(f'<p class="si-water"><strong>Water quality:</strong> {_wq_badge(wq)}{dated}</p>')
+            if wq.get("summary"):
+                src = f' <a href="{esc(str(wq["source_url"]))}">source</a>' if wq.get("source_url") else ""
+                bits.append(f'<p class="si-muted">{esc(str(wq["summary"]))}{src}</p>')
+        cards.append(f'<section class="card"><h2>Buoy &amp; water</h2>{"".join(bits)}</section>')
+
+    # --- Access & logistics (+ lifeguards, schools & rentals, food) ----------
+    access, lifeguards = view["access"], view["lifeguards"]
+    if access or lifeguards.get("covered") or view["rentals"] or view["food"]:
+        bits = []
+        kv: list[tuple[str, str]] = []
+        for label, text, maps_url in _access_rows(view):
+            value = esc(text)
+            if maps_url:
+                value += f' · <a href="{esc(maps_url)}">Map</a>'
+            kv.append((label, value))
+        if kv:
+            dl_rows = "".join(
+                f'<div class="si-term">{esc(k)}</div><div class="si-def">{v}</div>' for k, v in kv
+            )
+            bits.append(f'<dl class="si-dl">{dl_rows}</dl>')
+        cols = []
+        if view["rentals"]:
+            items = []
+            for r in view["rentals"]:
+                name = str(r.get("name", "Rental"))
+                head = f'<a href="{esc(str(r["url"]))}">{esc(name)}</a>' if r.get("url") else esc(name)
+                offers = f" - {esc(str(r['offers']))}" if r.get("offers") else ""
+                price = f' <span class="si-muted">({esc(str(r["price_estimate"]))})</span>' if r.get("price_estimate") else ""
+                maps = f' · <a href="{esc(_place_maps_url(name, spot_name))}">Map</a>'
+                items.append(f"<li>{head}{offers}{price}{maps}</li>")
+            cols.append(f'<div><h4>Schools &amp; rentals</h4><ul class="si-list">{"".join(items)}</ul></div>')
+        if view["food"]:
+            items = []
+            for food in view["food"]:
+                meta_bits = []
+                if food.get("type"):
+                    meta_bits.append(f"({esc(str(food['type']))})")
+                if food.get("note"):
+                    meta_bits.append(esc(str(food["note"])))
+                meta = f' <span class="si-muted">{" - ".join(meta_bits)}</span>' if meta_bits else ""
+                items.append(f'<li>{esc(str(food.get("name", "")))}{meta}</li>')
+            cols.append(f'<div><h4>Food</h4><ul class="si-list">{"".join(items)}</ul></div>')
+        if cols:
+            bits.append(f'<div class="si-two">{"".join(cols)}</div>')
+        cards.append(f'<section class="card"><h2>Access &amp; logistics</h2>{"".join(bits)}</section>')
+
+    # --- Nearby alternatives --------------------------------------------------
+    if view["nearby_spots"]:
+        near_rows = []
+        for s in view["nearby_spots"]:
+            name = str(s.get("name", "Spot"))
+            url = _place_maps_url(name, spot_name, s.get("approx_coordinates"))
+            head = f'<span class="si-peak-name">{esc(name)} · <a href="{esc(url)}">Map</a></span>'
+            note = f'<span class="si-peak-when">{esc(str(s["note"]))}</span>' if s.get("note") else ""
+            near_rows.append(f"<li>{head}{note}</li>")
+        cards.append(
+            '<section class="card"><h2>Nearby alternatives</h2>'
+            f'<ul class="si-peaks">{"".join(near_rows)}</ul></section>'
+        )
+
+    # --- Community notes (always present; explicit empty state) --------------
+    notes = view["community_notes"]
+    if notes:
+        items = []
+        for n in notes:
+            date_s = esc(str(n.get("date", "")))
+            url = n.get("source_url")
+            head = f'<a href="{esc(str(url))}">{date_s}</a>' if url else date_s
+            meta_bits = _note_meta_bits(n)
+            meta = f'<span class="cn-meta">{esc(" · ".join(meta_bits))}</span>' if meta_bits else ""
+            items.append(
+                f'<li class="cn-item"><span class="cn-date">{head}</span> '
+                f'<span class="cn-summary">{esc(str(n.get("summary", "")))}</span>{meta}</li>'
+            )
+        notes_body = f'<ul class="cn-list">{"".join(items)}</ul>'
+    else:
+        notes_body = f'<p class="placeholder">{esc(NO_COMMUNITY_NOTES)}</p>'
+    cards.append(
+        '<section class="card"><h2>Community notes</h2>'
+        '<p class="sub">Recent first-hand accounts from the surf communities.</p>'
+        f"{notes_body}</section>"
+    )
+
+    # --- Right rail: Location (Leaflet map) + webcams -------------------------
+    rail_cards: list[str] = []
+    info_map_js = ""
+    if view["coordinates"]:
+        lat, lon = view["coordinates"]
+        rail_cards.append(
+            '<section class="card">'
+            f'<h2><a href="{esc(_gmaps_coords_url(lat, lon))}">Location</a></h2>'
+            f'<p class="sub"><strong>Coordinates:</strong> {esc(f"{lat}, {lon}")}</p>'
+            '<div id="info-map" class="si-map"></div>'
+            "</section>"
+        )
+        info_map_js = (
+            INFO_MAP_JS.replace("__ILAT__", json.dumps(float(lat)))
+            .replace("__ILON__", json.dumps(float(lon)))
+        )
+    if view["webcams"]:
+        cam_html = []
+        for cam in view["webcams"]:
+            inner = (
+                f'<span class="name">{esc(str(cam.get("name", "Webcam")))}</span>'
+                f'<span class="tag">{"Free" if cam.get("free") else "Paywalled"}</span>'
+            )
+            url = cam.get("url")
+            cam_html.append(
+                f'<a class="webcam" href="{esc(str(url))}">{inner}</a>' if url
+                else f'<div class="webcam">{inner}</div>'
+            )
+        rail_cards.append(
+            '<section class="card"><h2>Webcams</h2>'
+            f'<div class="webcams">{"".join(cam_html)}</div></section>'
+        )
+
+    left = "\n".join(cards)
+    rail = "\n".join(rail_cards)
+    if rail:
+        body = (
+            '<div class="si-dossier">\n'
+            f'<div class="si-read">\n{left}\n</div>\n'
+            f'<aside class="si-rail">\n{rail}\n</aside>\n'
+            "</div>"
+        )
+    else:
+        body = left
+    strip = _facts_strip_html(view)
+    parts = [p for p in (strip, body) if p]
+    return '<main class="wrap">\n' + "\n".join(parts) + "\n</main>", info_map_js
+
+
 def render_dashboard(package: dict[str, Any]) -> str:
     """Render the self-contained tabbed Dashboard HTML document for a package.
 
     One file: a four-button tab bar (Today / Forecast / Windows / Spot info),
     four panels, and an inline toggle script that shows one panel at a time (the
-    opening tab is chosen by a URL fragment; default Today). The Today,
-    Forecast and Windows panels are populated; Spot info is still a placeholder.
+    opening tab is chosen by a URL fragment; default Today). All four panels are
+    populated: Today, Forecast, Windows, and Spot info (the spot's standing
+    context - the facts strip and dossier of works-on profile, The Wave,
+    hazards, buoy & water with water quality, access & logistics, nearby
+    alternatives, community notes, the Location map, and webcams).
     Reads Leaflet's vendored CSS/JS for inlining (raises OSError when missing,
-    which the CLI
-    turns into a soft failure). Every value drawn from the package is
-    HTML-escaped; the only remote reference emitted is the OSM tile URL template
-    inside the inlined map init.
+    which the CLI turns into a soft failure). Every value drawn from the package is
+    HTML-escaped; the only remote references emitted are the OSM tile URL
+    templates inside the two inlined map inits (the Today hero and the Spot
+    info Location map).
     """
     view = _target_day_view(package)
     esc = html.escape
@@ -1596,6 +2218,7 @@ def render_dashboard(package: dict[str, Any]) -> str:
     today_body, map_js = _today_panel_html(view)
     forecast_body = _forecast_panel_html(_forecast_view(package))
     windows_body = _windows_panel_html(_windows_view(package))
+    info_body, info_map_js = _spot_info_panel_html(_spot_info_view(package))
 
     # --- Tab bar (fixed order) ---------------------------------------------
     tab_buttons = "".join(
@@ -1621,19 +2244,17 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"{tab_buttons}{theme_control}</nav>"
     )
 
-    # --- Panels (Today + Forecast + Windows populated; Spot info placeholder) --
-    # Populated bodies are looked up by tab key; any tab without one falls back
-    # to its placeholder card, so render_dashboard stays tab-agnostic.
-    populated = {"today": today_body, "forecast": forecast_body, "windows": windows_body}
+    # --- Panels (all four populated) ---------------------------------------
+    # Bodies are looked up by tab key so render_dashboard stays tab-agnostic.
+    populated = {
+        "today": today_body,
+        "forecast": forecast_body,
+        "windows": windows_body,
+        "info": info_body,
+    }
     panels = []
     for key, _label in DASHBOARD_TABS:
-        body = populated.get(key)
-        if body is None:
-            heading, copy = PANEL_PLACEHOLDERS[key]
-            body = (
-                f'<main class="wrap"><section class="card"><h2>{esc(heading)}</h2>'
-                f'<p class="placeholder">{esc(copy)}</p></section></main>'
-            )
+        body = populated[key]
         hidden = "" if key == "today" else " hidden"
         panels.append(
             f'<section class="panel" id="panel-{key}" role="tabpanel" '
@@ -1666,7 +2287,8 @@ def render_dashboard(package: dict[str, Any]) -> str:
         f"{footer}\n"
         f"<script>{leaflet_js}</script>\n"
         f"<script>{map_js}</script>\n"
-        f"<script>{TOGGLE_JS}</script>\n"
+        + (f"<script>{info_map_js}</script>\n" if info_map_js else "")
+        + f"<script>{TOGGLE_JS}</script>\n"
         f"<script>{THEME_JS}</script>\n"
         f"<script>{FORECAST_JS}</script>\n"
         f"<script>{WINDOWS_JS}</script>\n"
@@ -1677,10 +2299,10 @@ def render_dashboard(package: dict[str, Any]) -> str:
 def render_dashboard_markdown(package: dict[str, Any]) -> str:
     """Render the flat Markdown twin of the Dashboard (no tabs; sections stacked).
 
-    Markdown has no tabs, so the four views stack: Today and Forecast (populated)
-    then Windows / Spot info placeholders. The Today and Forecast sections mirror
-    their HTML panels from the same resolved values (`_target_day_view` /
-    `_forecast_view`), so the twin never drifts from the page. Raises KeyError
+    Markdown has no tabs, so the four views stack: Today, Forecast, Windows and
+    Spot info. Each section mirrors its HTML panel from the same resolved
+    values (`_target_day_view` / `_forecast_view` / `_windows_view` /
+    `_spot_info_view`), so the twin never drifts from the page. Raises KeyError
     when `analysis.target_day` is absent (soft-failed by the CLI).
     """
     view = _target_day_view(package)
@@ -1773,13 +2395,185 @@ def render_dashboard_markdown(package: dict[str, Any]) -> str:
             "",
         ]
 
-    for key, _ in DASHBOARD_TABS:
-        if key not in PANEL_PLACEHOLDERS:
-            continue
-        heading, copy = PANEL_PLACEHOLDERS[key]
-        lines += [f"## {heading}", "", f"_{copy}_", ""]
+    # Spot info: the spot's standing context, mirroring the HTML Spot info panel.
+    lines += _spot_info_markdown(_spot_info_view(package))
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _spot_info_markdown(view: dict[str, Any]) -> list[str]:
+    """The Spot info section lines for the Markdown twin (mirrors the HTML panel).
+
+    Markdown has no columns or maps, so the dossier flattens to a stack: the
+    facts strip as plain lines, then Works-on profile (with the freshness note,
+    a re-research prompt when stale/undated, and the applied model bias), The
+    Wave (prose + peaks), hazards, buoy & water (water quality included),
+    access & logistics (Google Maps links as Markdown links), nearby
+    alternatives, community notes (their explicit checked-and-absent state when
+    none), Location (a Google Maps link plus the coordinates, no embedded map),
+    and webcams, from the same `_spot_info_view` the HTML panel uses, so the
+    two never drift.
+    """
+    lines = ["## Spot info", ""]
+    spot_name = str(view["spot_name"])
+
+    # --- Facts (the strip, flattened to lines) --------------------------------
+    profile = view["profile"]
+    wq = view["water_quality"]
+    facts = _spot_info_facts(view)
+    if facts:
+        lines += [f"- **{label}:** {text}" for label, _kind, text in facts] + [""]
+
+    # --- Works-on profile ------------------------------------------------------
+    age_line, reresearch = _profile_freshness(view["profile_meta"])
+    lines += ["### Works-on profile", ""]
+    if age_line:
+        lines += [age_line, ""]
+    rows = [f"- **{label}:** {profile[key]}" for key, label in WORKS_ON_FIELDS if profile.get(key)]
+    if rows:
+        lines += rows + [""]
+    else:
+        lines += ["_No researched works-on profile yet. Run /surfing:research to build one._", ""]
+    if reresearch:
+        lines += [f"_{reresearch}_", ""]
+    bias = view["bias"]
+    if bias and bias.get("applied"):
+        note = bias.get("note") or "A per-spot model correction is applied to the forecast."
+        meta_bits = _bias_meta_bits(bias)
+        meta = f" ({', '.join(meta_bits)})" if meta_bits else ""
+        lines += [f"**Model bias applied:** {note}{meta}", ""]
+
+    # --- The Wave: prose + peaks -----------------------------------------------
+    if profile.get("description") or profile.get("character_notes") or view["peaks"]:
+        lines += ["### The Wave", ""]
+        if profile.get("description"):
+            lines += [str(profile["description"]), ""]
+        if profile.get("character_notes"):
+            lines += [str(profile["character_notes"]), ""]
+        if view["peaks"]:
+            for pk in view["peaks"]:
+                head = f"**{pk.get('name', 'Peak')}**"
+                if pk.get("suits"):
+                    head += f" ({pk['suits']})"
+                if pk.get("character"):
+                    head += f" - {pk['character']}"
+                if pk.get("works_best"):
+                    head += f". Works: {pk['works_best']}"
+                lines.append(f"- {head}")
+            lines.append("")
+
+    if view["hazards"]:
+        lines += ["### Hazards", ""]
+        lines += [f"- {h}" for h in view["hazards"]] + [""]
+
+    # --- Buoy & water (water quality included) ----------------------------------
+    buoy, sea = view["buoy"], view["sea_temperature"]
+    if buoy or sea or wq:
+        lines += ["### Buoy & water", ""]
+        station = buoy.get("station") or {}
+        if station:
+            label = _buoy_label(station)
+            if station.get("url"):
+                label = f"[{label}]({station['url']})"
+            meta_bits = _buoy_meta_bits(station)
+            meta = f" - {', '.join(meta_bits)}" if meta_bits else ""
+            lines.append(f"- **Assigned buoy:** {label}{meta}")
+        temp = sea.get("current")
+        if temp is not None:
+            src = f" ({sea['source']})" if sea.get("source") else ""
+            lines.append(f"- **Water temperature:** {_fmt_label(temp)}{view['temp_unit']}{src}")
+            if sea.get("wetsuit"):
+                lines.append(f"- **Wetsuit:** {sea['wetsuit']}")
+        if wq:
+            line = f"- **Water quality:** {wq.get('status', 'Unknown')}"
+            if wq.get("dated"):
+                line += f" (checked {wq['dated']})"
+            if wq.get("summary"):
+                line += f" - {wq['summary']}"
+            if wq.get("source_url"):
+                line += f" ([source]({wq['source_url']}))"
+            lines.append(line)
+        lines.append("")
+
+    # --- Access & logistics ------------------------------------------------------
+    access, lifeguards = view["access"], view["lifeguards"]
+    if access or lifeguards.get("covered") or view["rentals"] or view["food"]:
+        lines += ["### Access & logistics", ""]
+        for label, text, maps_url in _access_rows(view):
+            line = f"- **{label}:** {text}"
+            if maps_url:
+                line += f" ([Map]({maps_url}))"
+            lines.append(line)
+        lines.append("")
+        if view["rentals"]:
+            lines += ["**Schools & rentals:**", ""]
+            for r in view["rentals"]:
+                name = str(r.get("name", "Rental"))
+                head = f"[{name}]({r['url']})" if r.get("url") else name
+                line = f"- {head}"
+                if r.get("offers"):
+                    line += f" - {r['offers']}"
+                if r.get("price_estimate"):
+                    line += f" ({r['price_estimate']})"
+                line += f" ([Map]({_place_maps_url(name, spot_name)}))"
+                lines.append(line)
+            lines.append("")
+        if view["food"]:
+            lines += ["**Food:**", ""]
+            for food in view["food"]:
+                line = f"- {food.get('name', '')}"
+                if food.get("type"):
+                    line += f" ({food['type']})"
+                if food.get("note"):
+                    line += f" - {food['note']}"
+                lines.append(line)
+            lines.append("")
+
+    # --- Nearby alternatives ------------------------------------------------------
+    if view["nearby_spots"]:
+        lines += ["### Nearby alternatives", ""]
+        for s in view["nearby_spots"]:
+            name = str(s.get("name", "Spot"))
+            url = _place_maps_url(name, spot_name, s.get("approx_coordinates"))
+            line = f"- **{name}** ([Map]({url}))"
+            if s.get("note"):
+                line += f" - {s['note']}"
+            lines.append(line)
+        lines.append("")
+
+    lines += ["### Community notes", ""]
+    notes = view["community_notes"]
+    if notes:
+        for n in notes:
+            date_s = str(n.get("date", ""))
+            head = f"[{date_s}]({n['source_url']})" if n.get("source_url") else date_s
+            line = f"- **{head}**: {n.get('summary', '')}".rstrip()
+            meta_bits = _note_meta_bits(n)
+            if meta_bits:
+                line += f" ({' · '.join(meta_bits)})"
+            lines.append(line)
+        lines.append("")
+    else:
+        lines += [f"_{NO_COMMUNITY_NOTES}_", ""]
+
+    # --- Location (a link + the coordinates; Markdown embeds no map) -------------
+    if view["coordinates"]:
+        lat, lon = view["coordinates"]
+        lines += [
+            "### Location", "",
+            f"[Google Maps]({_gmaps_coords_url(lat, lon)}) - Coordinates: {lat}, {lon}", "",
+        ]
+
+    if view["webcams"]:
+        lines += ["### Webcams", ""]
+        for cam in view["webcams"]:
+            name = str(cam.get("name", "Webcam"))
+            cam_access = "Free" if cam.get("free") else "Paywalled"
+            link = f"[{name}]({cam['url']})" if cam.get("url") else name
+            lines.append(f"- {link} - {cam_access}")
+        lines.append("")
+
+    return lines
 
 
 def _best_verdict(days: list[dict[str, Any]]) -> str:

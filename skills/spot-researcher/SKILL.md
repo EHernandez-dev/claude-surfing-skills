@@ -304,8 +304,11 @@ regional forums, local surf club or school pages, dated blog and video posts.
 
 ## Access & Practical
 1. Search: "{spot_name} parking surf access" and "{spot_name} webcam"
-2. Extract: parking situation (lot/street/fees), paddle-out entry and exit points,
-   walking distance, facilities (showers/toilets), free webcam URLs
+2. Extract: parking situation (lot/street/fees) with the lot's approximate
+   coordinates when a map or listing gives them (null when not found - never
+   guess), how to get there without a car (train/metro/bus line and stop),
+   paddle-out entry and exit points, walking distance, facilities
+   (showers/toilets), free webcam URLs
    (Surfline cams are paywalled - prefer free cams: city/harbor/hotel cams, windy.com webcams)
 
 ## Lifeguards
@@ -333,7 +336,7 @@ regional forums, local surf club or school pages, dated blog and video posts.
     {"date": "...", "source_url": "...", "summary": "...", "conditions": "...", "crowd": "...", "hazards": "..."}
   ],
   "localism": {"level": "none|mild|moderate|heavy|unknown", "notes": "...", "evidence": "..."},
-  "access": {"parking": "...", "entry_exit": "...", "facilities": "...", "fees": "..."},
+  "access": {"parking": "...", "parking_coordinates": "[lat, lon] or null", "transit": "...", "entry_exit": "...", "facilities": "...", "fees": "..."},
   "lifeguards": {"covered": "yes|no|unknown", "season_hours": "...", "source_url": "..."},
   "rentals": [{"name": "...", "offers": "...", "price_estimate": "... (currency, per what)", "url": "..."}],
   "food": [{"name": "...", "type": "...", "note": "when/why to go"}],
@@ -354,8 +357,9 @@ After the Python script and all agents return, aggregate into a unified data str
 {
   "conditions": { /* from fetch_conditions.py */ },
   "spot_data": {
-    "profile": { /* merged spot_profile from Agents 1+2; note conflicts */ },
+    "profile": { /* merged spot_profile from Agents 1+2 (fold Agent 2's character_notes in as profile.character_notes); note conflicts */ },
     "peaks": [ /* merged from Agents 1+2; empty for single-peak breaks */ ],
+    "water_quality": { /* from Step 3D: {"status": "...", "advisory": false, "summary": "dated statement", "dated": "YYYY-MM-DD", "source_url": "..."} */ },
     "hazards": [ /* merged */ ],
     "community_notes": [ /* from Agent 3; empty list = checked and absent */ ],
     "localism": { /* from Agent 3 */ },
@@ -389,6 +393,7 @@ WebSearch: "{beach/county} beach water quality" (US: county health dept; CA: bea
 - If the region has a rain-runoff rule of thumb (e.g., Southern California's "72 hours after rain"), state it and check the precipitation forecast against it.
 - Check for active advisories (sewage, algal blooms, closures). Synthesize a dated statement with a source link.
 - If nothing found, say so explicitly rather than implying clean water.
+- Record the finding as the structured `spot_data.water_quality` slot (see Step 3C): `{"status", "advisory", "summary", "dated", "source_url"}` - `status` is a short display word ("Good", "Advisory", "Closed", "Unconfirmed"), `advisory` is true whenever an active advisory or closure is on, `summary` is the dated statement, `dated` the check date, `source_url` the source link. The dashboard's Spot info tab renders this slot (a status badge in the facts strip and the detail inside Buoy & water); the report's Water Quality section prose is written from the same finding.
 
 ### Phase 4: Spot Analysis
 
@@ -660,7 +665,7 @@ mode; it supersedes the retired `single` mode.
 3. The script prints JSON on exit 0 either way:
    - Success: `{"html_path": "reports/{target-date}-{spot-slug}-dashboard.html", "md_path": "reports/{target-date}-{spot-slug}-dashboard.md"}`.
      It writes the self-contained HTML Dashboard plus a paired flat Markdown twin (the four views
-     stacked; the Today, Forecast and Windows sections are populated). The Forecast panel is
+     stacked; all four sections are populated). The Forecast panel is
      interactive: a **Week at a glance** overview (a compressed 7-day tide chart, each day clipped to
      its own first-light-to-last-light window with the mid-tide two-tone split) above a **By day**
      list of day-selector rows (weekday, works-on-corrected GO / CHECK / SKIP verdict from
@@ -671,9 +676,30 @@ mode; it supersedes the retired `single` mode.
      in date order, each day expandable to its own tide chart with the recommended session shaded
      (rows toggle independently, so several charts can be open at once; the earliest day is open by
      default). The stored `analysis.windows` order stays best-first (the contract); the panel sorts
-     by date for display. The Markdown twin has no interaction: it lists the seven days and the
-     windows (in the same date order, no charts). The dashboard name is stable (no verdict slug), so
-     a re-run the same day overwrites both files.
+     by date for display. The Spot info panel carries the spot's standing, non-time-sensitive
+     context in a composed layout: a full-width at-a-glance **facts strip** (Break · Level · Water ·
+     Water quality · UV index · Lifeguards · Profile age; each tile only when its datum exists, UV
+     being the target day's `conditions.weather` value in a WHO-banded pill) above a two-column
+     **dossier**. The left column stacks the works-on profile (`spot_data.profile`) with the
+     profile-freshness note and a re-research suggestion when stale or undated (from
+     `conditions.spot.profile`) plus any applied model bias (`conditions.bias`); The Wave
+     (`profile.description`/`character_notes` prose and the named `spot_data.peaks`); the hazards
+     (`spot_data.hazards`); buoy & water (`conditions.buoy`, `conditions.sea_temperature`, and the
+     `spot_data.water_quality` badge + dated summary - water quality lives inside this card, never
+     standalone); access & logistics (`spot_data.access` with a coordinate-based or name-search
+     Google Maps "Map" link for parking, `spot_data.lifeguards`, `spot_data.rentals` and
+     `spot_data.food`, each rental with its website and a name-search Map link); the nearby
+     alternatives (`spot_data.nearby_spots`, preferring `approx_coordinates` for the Map link); and
+     the community notes (`spot_data.community_notes`, which fall back to an explicit "no recent
+     first-hand reports found" state so an empty section reads as checked-and-absent, never
+     broken). The sticky right rail holds a Location card (a second Leaflet map, re-measured when
+     the tab becomes visible, its heading linking to Google Maps) and the webcams
+     (`spot_data.webcams`). It reads only existing payload; no `fetch_conditions.py` change is
+     required. The Markdown twin has no interaction: it lists the seven days and the
+     windows (in the same date order, no charts) and stacks the same Spot info section flat (the
+     facts as lines, Google Maps links as Markdown links, a Location link + coordinates instead of
+     an embedded map). The
+     dashboard name is stable (no verdict slug), so a re-run the same day overwrites both files.
    - Soft failure: `{"error": ..., "note": ...}`. The markdown report/twin remain readable; note the
      failure to the user and continue, do not block on it.
 4. Open the HTML for the user on the Today tab (Today is the default, no fragment needed):
