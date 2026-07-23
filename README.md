@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
+  <a href="#the-dashboard">The Dashboard</a> •
   <a href="#how-it-fits-together">How It Fits Together</a> •
   <a href="#commands">Commands</a> •
   <a href="#the-surf-folder">Surf Folder</a> •
@@ -12,6 +13,8 @@
 </p>
 
 Research any surf spot once, then get instant, personalized morning calls forever. Claude pulls swell, wind, and tide forecasts, live buoy observations, spot guides, and community reports, and turns them into a spot-corrected verdict for the day: **Go**, **Worth a check**, or **Skip**. It remembers each spot you research, learns your quiver and skill level, ranks your week, and even learns how the forecast model misses your local break.
+
+![The Today tab of the surf Dashboard: verdict badge and analyst one-liner over a map of the spot, with the day's tide curve below](docs/images/dashboard-today.png)
 
 ---
 
@@ -29,6 +32,7 @@ Then, from a folder you'll keep your surf data in:
 
 ```
 /surfing:research Mundaka      # research a spot once (saves a reusable profile)
+/surfing:dashboard Mundaka     # the full tabbed dashboard for a spot, in your browser
 /surfing:conditions Mundaka    # instant conditions check, any morning after
 /surfing:week                  # rank the week across your home spots
 ```
@@ -36,6 +40,28 @@ Then, from a folder you'll keep your surf data in:
 Or just ask naturally: `"Research Ocean Beach SF"`.
 
 > Prefer the skill without the slash commands? `npx skills add EHernandez-dev/claude-surfing-skills` installs just the `spot-researcher` skill, which drives research from natural language. The daily-companion commands (`conditions`, `week`, `briefing`, `verify`) come with the plugin. See [Installation](#installation).
+
+---
+
+## The Dashboard
+
+`/surfing:dashboard <spot>` builds a single self-contained HTML page and opens it in your browser: four tabs, no server, no build step. Add `fast` (`/surfing:dashboard Sopelana fast`) for a ~20 second computed-only build that skips the analyst pass.
+
+**Today** (pictured above) leads with the verdict badge and a one-sentence call over a map of the spot, followed by the day's tide curve with the recommended session shaded and an hour-by-hour strip of swell, period, and wind aligned under it.
+
+**Forecast** shows the week at a glance (each day's tide curve clipped to daylight) and a by-day verdict list, corrected to the spot's works-on profile. Pick any day to open its full tide chart and hourly strip.
+
+![The Forecast tab: seven mini tide charts and a by-day verdict list with Go / Check / Skip badges and one-line reasons](docs/images/dashboard-forecast.png)
+
+**Windows** lists the week's best session windows in date order. Each one expands to its tide chart with the session band shaded and the hourly strip below, so you can see exactly why that window was picked.
+
+![The Windows tab: a recommended session window with its shaded band on the tide chart and an hourly swell, period, and wind strip](docs/images/dashboard-windows.png)
+
+**Spot info** is the spot's standing dossier, composed from the saved profile: the works-on profile (ideal swell, wind, tide, season), a description of the wave, hazards, access and parking, webcams, and nearby alternatives.
+
+![The Spot info tab: works-on profile table, wave description, location map, and webcam links](docs/images/dashboard-info.png)
+
+Every dashboard is theme-aware (auto, light, dark), saves a flat Markdown twin alongside the HTML, and re-running the command the same day simply refreshes the same file.
 
 ---
 
@@ -50,6 +76,7 @@ The plugin is built around one idea: **research a spot once, reuse it forever.**
                      │  spots/<slug>.yaml  (works-on profile, buoy, hazards)
                      ▼
   ┌─ daily use, now instant & personal ─────────────────────────────┐
+  │  /surfing:dashboard    the tabbed HTML page for one spot         │
   │  /surfing:conditions   one spot, right now                       │
   │  /surfing:windows      best session windows this week            │   every morning
   │  /surfing:week         ranked dashboard across your home spots   │
@@ -62,12 +89,12 @@ The plugin is built around one idea: **research a spot once, reuse it forever.**
   │  /surfing:verify <spot> → compares logs vs archived forecasts,   │   whenever you surf
   │                           stores the model bias in the profile   │
   └─────────────────────────────────────────────────────────────────┘
-       the bias then sharpens every future conditions/week/briefing call
+       the bias then sharpens every future daily-use call
 ```
 
 1. **Research once.** `/surfing:research` writes a full Markdown report *and* saves a **spot profile** (`spots/<slug>.yaml`): the conditions the spot works in, its coordinates and facing, the buoy to watch, hazards, and logistics.
 2. **Tell it about you.** A **surfer profile** (`surfer.yaml`) holds your skill level, boards, home spots, unit preference, and target days. Now every verdict is made for *you*, a small clean day can be a Go for a beginner and a Skip for an expert.
-3. **Daily checks are instant.** With a saved profile, `conditions`/`windows`/`week`/`briefing` skip all the web research: one deterministic fetch, verdicts corrected to the spot's own profile and weighed for you, in seconds.
+3. **Daily checks are instant.** With a saved profile, `dashboard`/`conditions`/`windows`/`week`/`briefing` skip all the web research: one deterministic fetch, verdicts corrected to the spot's own profile and weighed for you, in seconds.
 4. **It learns your break.** Daily checks quietly archive the forecast. When you log a session, `/surfing:verify` compares what you got against what was predicted and stores a per-spot **model bias** ("under-calls size by ~0.3 m here"), which every later call then corrects for.
 
 ---
@@ -76,14 +103,15 @@ The plugin is built around one idea: **research a spot once, reuse it forever.**
 
 | Command | What it does | Time |
 |---------|-------------|------|
-| `/surfing:research <spot>` | Full spot report (guide, hazards, logistics) + saves a reusable spot profile | 3-5 min |
+| `/surfing:research <spot>` | Full spot report (guide, hazards, logistics), saves a reusable spot profile, opens the Dashboard | 3-5 min |
+| `/surfing:dashboard <spot> [fast]` | The tabbed HTML [Dashboard](#the-dashboard) (Today / Forecast / Windows / Spot info), opened in your browser; `fast` skips the analyst pass | ~1 min (~20 sec fast) |
 | `/surfing:conditions <spot>` | Instant conditions check: swell, wind, tides, buoy, water temp, daylight, verdict | ~30 sec |
 | `/surfing:windows <spot>` | Best session windows for one spot over the next 7 days | ~30 sec |
 | `/surfing:week [spots]` | Ranked dashboard of the week's best windows across your home spots, plus a visual HTML page | ~1 min |
 | `/surfing:briefing [--alert]` | Tomorrow's compact call across home spots; `--alert` stays silent unless a spot's works-on thresholds are forecast within 5 days | ~30 sec |
 | `/surfing:verify <spot>` | Compares your session logs against archived forecasts and stores the learned model bias | ~30 sec |
 
-Verdicts are always **Go / Worth a check / Skip**, corrected to the spot's works-on profile and personalized to your surfer profile, never a raw quality score. Reports save as `reports/{target-date}-{spot-slug}-{verdict}.md`, each with a self-contained, full-width HTML companion: a map hero, a **dawn-to-dusk tide chart** with an **hour-by-hour surf strip** aligned to it (swell height, wind, and per-hour quality), the week outlook, and hazards.
+Verdicts are always **Go / Worth a check / Skip**, corrected to the spot's works-on profile and personalized to your surfer profile, never a raw quality score. The per-spot HTML output is the tabbed [Dashboard](#the-dashboard) (`reports/{target-date}-{spot-slug}-dashboard.html`, with a flat Markdown twin); `/surfing:research` additionally saves its full written report as `reports/{target-date}-{spot-slug}-{verdict}.md`, and `/surfing:week` renders its own multi-spot HTML page next to the ranked chat output.
 
 The daily commands run unattended too: schedule the briefing and the swell alert so the morning call comes to you. See [`docs/AUTOMATION.md`](docs/AUTOMATION.md).
 
@@ -104,7 +132,7 @@ The plugin reads and writes everything in one working directory (the folder you 
 |------|---------------|
 | `surfer.yaml` | Your profile: skill level, boards, home spots, unit preference, target days (copy [`surfer-template.yaml`](skills/spot-researcher/assets/surfer-template.yaml)) |
 | `spots/<slug>.yaml` | One profile per researched spot: works-on conditions, coordinates, facing, buoy, hazards, and any learned model bias |
-| `reports/` | Generated reports (`{target-date}-{spot-slug}-{verdict}.md`) and their HTML companions |
+| `reports/` | Per-spot Dashboards (`{target-date}-{spot-slug}-dashboard.html` + Markdown twin) and the research flow's written reports (`{target-date}-{spot-slug}-{verdict}.md`) |
 | `sessions/` | Your own session logs (`<date>-<slug>.md`), the input to the verification loop (template: [`session-log-template.md`](skills/spot-researcher/assets/session-log-template.md)) |
 | `forecasts/<slug>.jsonl` | Append-only forecast snapshots, the archive `/surfing:verify` learns from |
 
@@ -117,33 +145,21 @@ To get started, copy the surfer template to `surfer.yaml`, list your `home_spots
 `/surfing:research` uses a hybrid architecture: a Python script for deterministic API calls, LLM agents for the parts that need judgment.
 
 ```mermaid
-graph TB
-    Start([Research a surf spot]) --> Search[Phase 1-2: Identify spot<br/>Resolve coordinates, determine facing]
-    Search --> Parallel[Phase 3: Parallel Data Gathering]
-    Parallel --> Python[Python Script<br/>Swell, wind, tides,<br/>buoy, water temp, daylight]
-    Parallel --> Agent1[Researcher Agent 1<br/>Surfline + Wannasurf]
-    Parallel --> Agent2[Researcher Agent 2<br/>surf-forecast.com + SurferToday]
-    Parallel --> Agent3[Researcher Agent 3<br/>Community reports]
-    Python --> Analyze
-    Agent1 --> Analyze
-    Agent2 --> Analyze
-    Agent3 --> Analyze
-    Analyze[Phase 4: Analysis<br/>Works-on profile, forecast match, hazards]
-    Analyze --> Writer[Phase 5: Report Writer]
-    Writer --> Reviewer[Phase 6: Report Reviewer]
-    Reviewer --> Profile([Phase 7: Save spot profile])
-    style Start fill:#e1f5ff
-    style Profile fill:#e1f5ff
-    style Parallel fill:#fff4e1
-    style Python fill:#e8f5e9
-    style Agent1 fill:#f0f0f0
-    style Agent2 fill:#f0f0f0
-    style Agent3 fill:#f0f0f0
-    style Writer fill:#fff3e0
-    style Reviewer fill:#fff3e0
+flowchart LR
+    ID(["Identify the spot<br/>coordinates + facing"]) --> G
+    subgraph G["Gather in parallel"]
+        direction TB
+        PY["Python fetcher<br/>swell, wind, tides, buoy,<br/>water temp, daylight"]
+        A1["Agent: Surfline +<br/>Wannasurf"]
+        A2["Agent: surf-forecast +<br/>SurferToday"]
+        A3["Agent: community<br/>reports"]
+    end
+    G --> AN["Analysis<br/>works-on profile, hazards"]
+    AN --> WR["Write + review<br/>the report"]
+    WR --> OUT(["Dashboard + saved<br/>spot profile"])
 ```
 
-Three researcher agents gather data in parallel while a Python script fetches conditions; dedicated agents write and review the report; the final step saves the spot profile. If a source fails, the skill documents the gap and continues.
+Three researcher agents gather data in parallel while a Python script fetches conditions; dedicated agents write and review the report; the final step opens the Dashboard and saves the spot profile. If a source fails, the skill documents the gap and continues.
 
 The **daily commands are much lighter**: no web research, no agents. They run the same Python conditions fetcher against your saved profiles (in parallel for multi-spot sweeps) and correct the verdicts to each spot's works-on profile. That is why they take seconds, not minutes.
 
@@ -235,7 +251,7 @@ Pull requests welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgements
 
-This project is modeled on [claude-mountaineering-skills](https://github.com/dreamiurg/claude-mountaineering-skills) by [@dreamiurg](https://github.com/dreamiurg) (MIT), which pioneered the hybrid architecture used here: deterministic Python for API data, parallel researcher agents for judgment, and graceful degradation into an Information Gaps section. `cloudscrape.py` is adapted directly from that repo.
+This project started as an adaptation of [claude-mountaineering-skills](https://github.com/dreamiurg/claude-mountaineering-skills) by [@dreamiurg](https://github.com/dreamiurg) (MIT), whose hybrid research pattern (deterministic Python for API data, parallel researcher agents for judgment, graceful degradation into an Information Gaps section) still shapes the research flow. Everything around that flow has since grown here: the spot and surfer profiles, the daily companion commands, the tabbed HTML Dashboard renderer, the offline tide model, and the forecast verification loop. `cloudscrape.py` remains adapted directly from the original repo.
 
 ## License
 
