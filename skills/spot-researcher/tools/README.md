@@ -153,6 +153,41 @@ RUN_INTEGRATION_TESTS=1 uv run pytest -v
 
 ---
 
+### build_package.py
+
+Assembles the draft dashboard data package (SKILL.md Step 5A shape) deterministically from a `fetch_conditions.py` payload plus the spot profile YAML. Pure transform, no network. Driven by `/surfing:dashboard`: fast mode renders the draft as-is, normal mode edits only its judgment layer. Draft verdicts are true Verdicts (ADR 0007): quality-rating bands (epic/good = go, fair = check, poor/flat = skip) corrected against the machine-readable works-on fields; period below `min_period_s` is a hard skip, swell direction outside a +/-45 degree arc around the profile's compass token demotes one step. The prose works-on fields are never consulted, so the draft `one_liner` ends with the "Computed call, no analyst pass." tag.
+
+**Usage:**
+
+```bash
+uv run python build_package.py \
+  --payload "/abs/path/to/payload.json" \
+  --spot-file "/abs/path/to/spots/mundaka.yaml" \
+  --output "/abs/path/to/package.json"
+```
+
+**Parameters:**
+
+- `--payload` (required): Path to the fetch payload JSON (the `fetch_conditions.py` stdout, saved to a file)
+- `--spot-file` (optional): Path to the spot profile (`spots/<slug>.yaml`). Supplies the works-on corrections and the `spot_data` mapping; without it the draft has no `spot_data` and verdicts are rating-only
+- `--surfer-file` (optional): Path to `surfer.yaml`; passed through as the package's `surfer_profile`
+- `--target-day` (optional): The day (YYYY-MM-DD) the analysis keys to; defaults to the payload's `report.target_date`. `conditions.report` is rewritten to stay consistent when it differs
+- `--output` (optional): Write the package JSON here and echo `{"package_path", "target_day", "verdict"}`; without it the full package prints to stdout
+
+**Output:**
+
+The complete render-ready package: `conditions` (payload verbatim), `analysis` (`target_day`, `week`, `windows`, all draft), `spot_data` (structured YAML fields mapped; the `notes` prose carried verbatim as `profile.description`; `community_notes: []`; prose-derived cards absent), `gaps` (copied from the payload), and `surfer_profile` when provided.
+
+**Contract:** a data problem (missing/unreadable/malformed payload or YAML, a payload without `surf_windows` or forecast days, a target day outside the window) exits 0 with `{"error", "note"}` and writes no output file; exit 1 is reserved for invalid CLI arguments (malformed `--target-day`).
+
+**Testing:**
+
+```bash
+uv run pytest -v test_build_package.py
+```
+
+---
+
 ### verify_forecast.py
 
 The forecast verification arithmetic: compares a surfer's observed sessions against the archived forecast snapshots for the same days and reduces the differences to a per-spot model bias. Pure computation, no network. Driven by `/surfing:verify`, which extracts the observed numbers from the freeform session logs and writes the returned bias into the spot profile's `model_bias` block.
