@@ -5,12 +5,20 @@ Domain language for the surf companion: researching surf spots, judging conditio
 ## Language
 
 **Verdict**:
-The per-day call for one spot: Go, Worth a check, or Skip. Always spot-corrected (judged against the spot's works-on profile and the surfer, never the raw quality score alone). Filename slugs: `-go`, `-check`, `-skip`.
+The per-day call for one spot: Go, Worth a check, or Skip. Spot-corrected: judged against the spot's works-on profile when one exists, and personalized by the surfer profile when present. Never presented as the raw quality score alone. Filename slugs: `-go`, `-check`, `-skip`.
 _Avoid_: rating, go/no-go, caution
 
 **Quality score**:
 The spot-agnostic 0-10 heuristic for a forecast block, computed from period, size, and wind only. Input to a verdict, never shown as one.
 _Avoid_: rating (as a user-facing term), stars
+
+**Draft package**:
+The render-ready data package assembled mechanically from the fetch payload and the spot profile, with no analyst pass: verdicts from quality-rating bands plus works-on demotions (swell direction, minimum period), formulaic display strings, windows clipped to daylight. A fast build renders it as-is; otherwise an analyst pass edits only its judgment layer (one-liners, why strings, verdict overrides against the prose works-on fields, window re-ranking).
+_Avoid_: draft report, package draft
+
+**Fast build**:
+A Dashboard rendered straight from the draft package. Its verdicts are true (mechanically spot-corrected) Verdicts, but shallower than an analyst's: the prose works-on fields (size range, tide window, wind preference) and the surfer profile are never consulted. Always marked in the hero line as a computed call with no analyst pass.
+_Avoid_: quick mode, draft dashboard
 
 **Works-on profile**:
 The conditions under which a spot works: swell direction window, size range, minimum period, ideal wind, ideal tide.

@@ -85,6 +85,9 @@ UNIT_LABELS = {
 # Filename slugs for the per-day verdict (Go / Worth a check / Skip).
 VERDICT_SLUGS = ("go", "check", "skip")
 
+# Start hours of the 3-hourly forecast blocks (05:00-21:00 local).
+BLOCK_GRID_HOURS = range(5, 22, 3)
+
 # Spot profiles never expire; past this age the payload suggests re-research.
 RERESEARCH_AFTER_DAYS = 183
 
@@ -1296,7 +1299,7 @@ def build_marine_days(
     days = []
     for i, date_str in enumerate(daily.get("time", [])):
         blocks = []
-        for hour in range(5, 22, 3):
+        for hour in BLOCK_GRID_HOURS:
             ts = f"{date_str}T{hour:02d}:00"
             if ts not in wave_ht:
                 continue

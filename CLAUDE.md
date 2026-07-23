@@ -33,6 +33,8 @@ uv run pytest -v
 
 `skills/spot-researcher/tools/render_report.py` is a second consumer of the `fetch_conditions.py` payload, plus the data package's `analysis` block (`analysis.target_day`, `analysis.week`; documented in SKILL.md Step 5A). A change to either the script's output keys or the `analysis` schema must be reflected everywhere all four stay in sync: `fetch_conditions.py`, `SKILL.md`, the report template, and `render_report.py`.
 
+`skills/spot-researcher/tools/build_package.py` is a deterministic producer of the same data package (draft `analysis` from the payload's `surf_windows`, `spot_data` mapped from the spot profile YAML; driven by `commands/dashboard.md`). Any change to the `fetch_conditions.py` output keys, the Step 5A `analysis` schema, the Step 3C `spot_data` shape, or the spot profile YAML schema must update `build_package.py` and its tests as well.
+
 `render_report.py` also consumes the week data package (`--mode week`; schema documented in SKILL.md next to Step 6C, produced by `commands/week.md`). Any change to that schema must update `render_report.py`, its tests, `SKILL.md`, and `commands/week.md` together.
 
 The verification loop adds two more shared contracts. The forecast archive JSONL that `fetch_conditions.py --archive` writes (`forecasts/<slug>.jsonl`, `build_archive_records`) is read by `verify_forecast.py`; a change to that snapshot shape must update both scripts and their tests together. The spot profile's `model_bias` block is written by `/surfing:verify` (via `verify_forecast.py`'s output) and read by `fetch_conditions.py --spot-file` (`parse_model_bias`); a change to it must update `assets/spot-profile-template.yaml`, `fetch_conditions.py`, `verify_forecast.py`, `commands/verify.md`, and the tests together.

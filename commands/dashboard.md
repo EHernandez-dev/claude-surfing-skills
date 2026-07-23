@@ -1,6 +1,6 @@
 ---
 name: dashboard
-description: Build and open a spot's tabbed HTML surf Dashboard (Today / Forecast / Windows / Spot info)
+description: Build and open a spot's tabbed HTML surf Dashboard (Today / Forecast / Windows / Spot info); add `fast` for a ~20 s computed-call build
 ---
 
 # Surf Dashboard
@@ -10,6 +10,8 @@ Build the single self-contained **Dashboard** for one spot: a tabbed HTML page (
 **This command is quiet.** On success, print nothing to chat except the opened file path (e.g. `Opened reports/2026-07-11-mundaka-dashboard.html`). Do NOT dump conditions, tables, or a verdict into the terminal: the Dashboard is where they are read. Only speak up when there is no HTML to open: a fetch failure or missing setup (see the failure path below).
 
 If the user provided a spot name as an argument (e.g., `/surfing:dashboard Ocean Beach`), use that as the target spot. Otherwise, ask which spot.
+
+**Two speeds.** If the argument list ends with the word `fast` (e.g., `/surfing:dashboard Sopelana fast`), run in **fast mode**: render the draft package exactly as `build_package.py` wrote it, no analysis pass (~20 s end to end for a profiled spot). Otherwise run in **normal mode** (default): take the same draft and edit only its judgment layer before rendering (Phase 2B). Both modes produce the same Dashboard file; fast trades analysis depth for speed and says so on the page.
 
 ## Phase 0: Surf Folder Check
 
@@ -23,10 +25,10 @@ Before any web lookup, check the working directory (the surf folder):
 ```bash
 cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python fetch_conditions.py \
   --spot-file "{absolute path to spots/<slug>.yaml}" \
-  --days 7
+  --days 7 > {absolute path to payload.json}
 ```
 
-Add `--surfer-file "{absolute path to surfer.yaml}"` when it exists. Paths must be absolute: the `cd` moves out of the surf folder.
+Add `--surfer-file "{absolute path to surfer.yaml}"` when it exists. Paths must be absolute: the `cd` moves out of the surf folder. Redirect the payload to a JSON file (a temp path is fine); Phase 2 consumes the file, so there is no need to read it into context.
 
 **If no spot profile exists**, run Phase 1 to resolve the spot, then fetch by coordinates. The Dashboard still builds; note in chat (this is a "missing setup" case worth speaking on) that the call is generic and a `/surfing:research {spot}` run would profile the spot and correct the verdicts.
 
@@ -47,27 +49,45 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python fetch_con
   --coordinates "{lat},{lon}" \
   --spot-name "{name}" \
   --facing {deg} \
-  --days 7
+  --days 7 > {absolute path to payload.json}
 ```
 
 **If the fetch fails** (the script prints an `error` field, or nothing usable comes back): there is no HTML to open, so speak. Report the failure plainly and give manual check links (Waves `https://www.windy.com/-Waves-waves`, Buoys `https://www.ndbc.noaa.gov` / `https://portus.puertos.es`, Tides `https://www.tide-forecast.com`). Do not fabricate a Dashboard.
 
 ## Phase 2: Assemble the Data Package
 
-Build the same Phase 5A data package the research flow produces (see SKILL.md Step 5A), from the fetch payload plus your analysis:
+The package is the same Phase 5A data package the research flow produces (see SKILL.md Step 5A). `build_package.py` drafts it deterministically in both modes; normal mode then edits the judgment layer.
 
-- `conditions`: the fetch payload verbatim, including a `report.filenames` object with `go`/`check`/`skip` entries under `reports/{target-date}-{slug}-{verdict}.md` (the renderer derives the stable dashboard name `reports/{target-date}-{slug}-dashboard.html` from it; the verdict slug itself is not used in the dashboard filename).
-- `analysis.target_day`: `date`, `verdict` (`go`/`check`/`skip`, spot-corrected against the works-on profile when one exists), `one_liner`, `windows` (`[{from, to, label}]`).
-- `analysis.week`: one entry per forecast day (`{date, verdict, swell, wind, why}`, display-ready strings with unit labels applied).
-- `analysis.windows`: the ranked best session windows over the week, best first (`[{date, window: {from, to, label}, verdict, swell, wind, why}]`, display-ready strings). Keep the list ordered best-first (the contract); the Windows tab sorts by date for display. For a profiled spot, rank against the works-on profile (demote or drop out-of-window swell, shift times toward the ideal tide) and say why in `why`. Omit or leave empty when nothing stands out; the Windows tab then shows a "no standout windows" state.
-- `spot_data`: the Spot info tab's content (same shape as SKILL.md Step 3C). **When a spot profile exists, build it from `spots/<slug>.yaml`; do not omit it**, or the tab shows "no researched works-on profile yet" next to the profile-freshness line the fetch payload carries. Map the YAML like so:
-  - `spot_data.profile`: the works-on grid. From `works_on`: `ideal_swell_direction`, `ideal_swell_size`, `ideal_period_s` (skip when null), `ideal_wind`, `ideal_tide`, `best_season`. From `break`: `break_type`, `bottom`, `wave_direction`, `ability_level`. From the `notes` prose, when stated: `crowd`, `consistency`, plus `description` / `character_notes` (a sentence or two each). Include only fields the profile actually states.
-  - `spot_data.peaks`, `spot_data.hazards`, `spot_data.webcams`: the YAML lists verbatim.
-  - From the `notes` prose, when stated: `access` (`{parking, parking_coordinates, transit, entry_exit, facilities, fees}`), `lifeguards` (`{covered, season_hours}`), `rentals` (`[{name, url, offers, price_estimate}]`), `food`, `nearby_spots` (`[{name, note, approx_coordinates}]`).
-  - `spot_data.community_notes`: `[]` (the dashboard command does no community sweep; the tab renders its explicit checked-and-absent state). Leave `water_quality` out for the same reason.
-  - No spot profile: omit `spot_data` entirely; every card renders as absent.
+### Phase 2A: Build the Draft Package (both modes)
 
-Write the package to a JSON file (a temp path is fine).
+```bash
+cd ${CLAUDE_PLUGIN_ROOT}/skills/spot-researcher/tools && uv run python build_package.py \
+  --payload {abs path to payload.json} \
+  --spot-file "{abs path to spots/<slug>.yaml}" \
+  --output {abs path to package.json}
+```
+
+- Omit `--spot-file` when no profile exists (the draft then has no `spot_data` and its verdicts are rating-only).
+- Add `--surfer-file "{abs path to surfer.yaml}"` when it exists (passed through as `surfer_profile`).
+- Add `--target-day YYYY-MM-DD` when the user named a day, or when `surfer.yaml`'s `target_days` default selects one inside the forecast window (that default is your call to apply; the script never reads it). The script keys the analysis to it and keeps `conditions.report` consistent.
+
+On success it echoes `{"package_path", "target_day", "verdict"}`. On `{"error", "note"}` (fetch payload unusable, unreadable inputs) there is no HTML to open, so speak: report the error per the failure path above.
+
+The draft it writes is complete and render-ready: `conditions` (the payload verbatim), draft `analysis` (verdicts from quality-rating bands corrected against the machine-readable works-on fields, per ADR 0007; display-ready strings; windows clipped to daylight), and `spot_data` (the structured YAML fields mapped, the `notes` prose carried verbatim as `profile.description`, `community_notes: []`). Prose-derived cards (access, lifeguards, rentals, food, nearby spots, crowd, consistency) stay absent in a draft: the script does not parse prose.
+
+**Fast mode: skip Phase 2B entirely.** Render the draft as-is. Its `one_liner` ends with the "Computed call, no analyst pass." tag; leave it in place, that is the page's honesty marker.
+
+### Phase 2B: Edit the Judgment Layer (normal mode only)
+
+Edit `package.json` in place; touch only the judgment layer, the mechanical fields are already right. Judge against the full works-on profile, including the prose fields the script cannot read (size range, tide window, wind preference):
+
+- `analysis.target_day.one_liner`: **always rewrite it** (one sentence tying swell + wind + tide). Never leave the draft tag in a normal-mode dashboard.
+- `analysis.week[]`: check each row's draft verdict against the works-on profile; override where judgment disagrees and rewrite `why` to say the real reason.
+- `analysis.windows`: re-rank against the works-on profile (demote or drop out-of-window swell, shift times toward the ideal tide) and rewrite `why`. Keep the list best-first (the contract); the Windows tab sorts by date for display. Empty is fine when nothing stands out.
+- `analysis.target_day.windows`: adjust `from`/`to`/`label` toward the ideal tide when the profile states one.
+- `spot_data`: reshape the carried prose. From the `notes` in `profile.description`, when stated: `crowd`, `consistency`, `character_notes`, `access` (`{parking, parking_coordinates, transit, entry_exit, facilities, fees}`), `lifeguards` (`{covered, season_hours}`), `rentals` (`[{name, url, offers, price_estimate}]`), `food`, `nearby_spots` (`[{name, note, approx_coordinates}]`) (shapes in SKILL.md Step 3C), then rewrite `description` as a proper sentence or two. Leave `water_quality` out and `community_notes` as `[]` (the dashboard command does no community sweep; the tab renders its explicit checked-and-absent state).
+
+Do not edit `conditions`: it is the fetch payload as `build_package.py` wrote it (with `report` kept consistent with the target day); the renderer derives the stable dashboard name `reports/{target-date}-{slug}-dashboard.html` from `report.filenames`.
 
 ## Phase 3: Render and Open
 

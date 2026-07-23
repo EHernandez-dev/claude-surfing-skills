@@ -483,6 +483,21 @@ these fields, so this is a contract, not a suggestion:
   and `why` states that reasoning. May be omitted or empty, which the Windows tab renders as an
   explicit "no standout windows" state
 
+**Draft producer:** `build_package.py` (tools/) assembles this same package deterministically from
+the fetch payload plus the spot profile YAML (plus optional `surfer.yaml` and `--target-day`): draft
+verdicts from the quality-rating bands (epic/good = go, fair = check, poor/flat = skip) corrected
+against the machine-readable works-on fields (period below `min_period_s` is a hard skip; swell
+direction outside a +/-45 degree arc around the profile's compass token demotes one step; see
+`docs/adr/0007`), display-ready strings, session windows clipped to daylight (go/check days only,
+ranked by score), and the structured `spot_data` mapping with the `notes` prose carried verbatim as
+`profile.description`. The draft `one_liner` ends with the "Computed call, no analyst pass." tag.
+The dashboard command (`commands/dashboard.md`) runs it in both of its modes: fast mode renders the
+draft as-is, normal mode edits only the judgment layer. This research workflow does not use it;
+Steps 3-5 author the package with full judgment. Same exit contract as the other tools: exit 1 only
+for invalid CLI arguments, unreadable or malformed inputs exit 0 with `{"error", "note"}`. Any
+change to the Step 5A schema, the Step 3C `spot_data` shape, or the fetch payload keys must update
+`build_package.py` and its tests too.
+
 #### Step 5B: Dispatch Report Writer Agent
 
 ```
@@ -827,6 +842,7 @@ OB changes block by block. If in doubt, don't paddle out.
 ## Execution Timeouts
 
 - **fetch_conditions.py:** 60s (five API round-trips; NOAA station list is large)
+- **build_package.py:** near-instant (no network; pure payload-to-package transform)
 - **WebFetch/WebSearch:** default timeouts
 - **Total skill execution:** Target 3-5 minutes, acceptable up to 10 for comprehensive research
 
