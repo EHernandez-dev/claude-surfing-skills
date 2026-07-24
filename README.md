@@ -31,9 +31,9 @@ Install the plugin (gives you the `/surfing:*` commands and the natural-language
 Then, from a folder you'll keep your surf data in:
 
 ```
-/surfing:research Mundaka      # research a spot once (saves a reusable profile)
-/surfing:dashboard Mundaka     # the full tabbed dashboard for a spot, in your browser
-/surfing:conditions Mundaka    # instant conditions check, any morning after
+/surfing:research Ocean Beach SF      # research a spot once (saves a reusable profile)
+/surfing:dashboard Ocean Beach SF     # the full tabbed dashboard for a spot, in your browser
+/surfing:conditions Ocean Beach SF    # instant conditions check, any morning after
 /surfing:week                  # rank the week across your home spots
 ```
 
@@ -120,7 +120,7 @@ The daily commands run unattended too: schedule the briefing and the swell alert
 | Report | What it shows |
 |--------|---------------|
 | [Ocean Beach, SF](skills/spot-researcher/examples/2026-07-08-ocean-beach-sf.md) | Expert beach break: buoy vs model cross-check, tide-keyed windows, hazard breakdown |
-| [Verification loop at Mundaka](tests/end-to-end/2026-07-12-verify-mundaka-model-bias.md) | The full learn-from-your-sessions loop end to end |
+| [Verification loop at Ocean Beach SF](tests/end-to-end/2026-07-12-verify-Ocean Beach SF-model-bias.md) | The full learn-from-your-sessions loop end to end |
 
 ---
 
