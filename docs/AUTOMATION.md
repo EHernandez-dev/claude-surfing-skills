@@ -95,3 +95,13 @@ The daily briefing (`briefing` mode) always notifies, since it is the morning ca
 ## Failure behavior
 
 Automation inherits the tool contract: `fetch_conditions.py` never hard-fails on a network or API error (it exits 0 with an `error`/`note`), so a flaky forecast API degrades a single spot rather than breaking the run. A scheduled briefing on a bad-network morning still produces output for the spots that fetched, and the alert simply cannot fire on a spot it could not read (it never emits a false ping). If the whole run fails, the wrapper's exit status is non-zero; wire that to a separate "briefing failed" notification if you want to know when the scheduler itself is unhealthy.
+
+## Backfilling the archive a posteriori
+
+The verification loop (`/surfing:verify`) needs a forecast snapshot for each session day. When a session predates archive coverage (the common early state, before a daily briefing keeps `forecasts/<slug>.jsonl` current), the forecast side may be backfilled after the fact: fetch the wave model's past output for the session hour (Open-Meteo marine, `start_date`/`end_date` on the spot profile's coordinates) and append it as one more JSONL record.
+
+A backfill is legitimate because verification measures the model's systematic miss at a spot, and a hindcast is the same model's account of the same hour. It is second-best to a real pre-session snapshot (a hindcast has effectively zero lead time, so lead-dependent error is absent), so prefer real snapshots whenever they exist and never overwrite them.
+
+Every backfill record must be labeled: it mirrors the normal snapshot shape, carries a `source` field stating it is a hindcast backfill fetched a posteriori (with the fetch date), computes `lead_days` normally (which comes out negative or zero, the machine-readable backfill marker), and stores raw model values, never bias-corrected ones, matching the archiver's raw contract.
+
+Decision record with full reasoning and validation: [#27](https://github.com/EHernandez-dev/claude-surfing-skills/issues/27).
