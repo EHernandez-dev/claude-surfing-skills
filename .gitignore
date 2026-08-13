@@ -35,6 +35,7 @@ logs/
 /surfer.yaml
 /reports/
 /forecasts/
+/sessions/
 
 # Renderer output that lands in the tools dir when run from the wrong cwd
 skills/spot-researcher/tools/reports/
